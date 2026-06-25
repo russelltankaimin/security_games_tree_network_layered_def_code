@@ -1,0 +1,45 @@
+Generating random out-tree topology...
+
+--- Hierarchical Tree Information ---
+■ Node_0
+  ├─ Parent:   None (Root)
+  ├─ Children: Node_1, Node_3
+  ├─ Cost (l): 1.44
+  ├─ Lockout:  q = 5
+  └─ Probs:    [k=0: 0.87, k=1: 0.61, k=2: 0.36, k=3: 0.34, k=4: 0.17]
+
+    ■ Node_1
+      ├─ Parent:   Node_0
+      ├─ Children: Node_2
+      ├─ Cost (l): 2.49
+      ├─ Lockout:  q = 3
+      └─ Probs:    [k=0: 0.70, k=1: 0.53, k=2: 0.42]
+
+        ■ Node_2
+          ├─ Parent:   Node_1
+          ├─ Children: None (Leaf)
+          ├─ Cost (l): 3.67
+          ├─ Lockout:  q = 4
+          └─ Probs:    [k=0: 0.63, k=1: 0.34, k=2: 0.29, k=3: 0.11]
+
+    ■ Node_3
+      ├─ Parent:   Node_0
+      ├─ Children: Node_4, Node_5
+      ├─ Cost (l): 3.88
+      ├─ Lockout:  q = 3
+      └─ Probs:    [k=0: 0.84, k=1: 0.20, k=2: 0.13]
+
+        ■ Node_4
+          ├─ Parent:   Node_3
+          ├─ Children: None (Leaf)
+          ├─ Cost (l): 2.56
+          ├─ Lockout:  q = 5
+          └─ Probs:    [k=0: 0.86, k=1: 0.52, k=2: 0.39, k=3: 0.36, k=4: 0.30]
+
+        ■ Node_5
+          ├─ Parent:   Node_3
+          ├─ Children: None (Leaf)
+          ├─ Cost (l): 1.44
+          ├─ Lockout:  q = 5
+          └─ Probs:    [k=0: 0.85, k=1: 0.83, k=2: 0.82, k=3: 0.68, k=4: 0.65]
+

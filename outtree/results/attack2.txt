@@ -1,0 +1,93 @@
+Exact Gittins indices successfully computed using symbolic piecewise functions.
+■ Node_0
+  ├─ Parent:   None (Root)
+  ├─ Children: Node_1
+  ├─ Cost (l): 3.93
+  ├─ Lockout:  q = 5
+  ├─ Probs:    [k=0: 0.73, k=1: 0.57, k=2: 0.45, k=3: 0.39, k=4: 0.16]
+  └─ Gittins:  [k=0: 0.2869, k=1: 0.2577, k=2: 0.2305, k=3: 0.2119, k=4: 0.1204, k=5: 0.0000]
+
+    ■ Node_1
+      ├─ Parent:   Node_0
+      ├─ Children: Node_2, Node_5
+      ├─ Cost (l): 1.56
+      ├─ Lockout:  q = 4
+      ├─ Probs:    [k=0: 0.90, k=1: 0.50, k=2: 0.41, k=3: 0.23]
+      └─ Gittins:  [k=0: 0.4830, k=1: 0.4288, k=2: 0.4072, k=3: 0.3309, k=4: 0.0000]
+
+        ■ Node_2
+          ├─ Parent:   Node_1
+          ├─ Children: Node_3, Node_4
+          ├─ Cost (l): 2.19
+          ├─ Lockout:  q = 3
+          ├─ Probs:    [k=0: 0.87, k=1: 0.46, k=2: 0.12]
+          └─ Gittins:  [k=0: 0.5775, k=1: 0.4839, k=2: 0.2396, k=3: 0.0000]
+
+            ■ Node_3
+              ├─ Parent:   Node_2
+              ├─ Children: None (Leaf)
+              ├─ Cost (l): 2.70
+              ├─ Lockout:  q = 4
+              ├─ Probs:    [k=0: 0.88, k=1: 0.86, k=2: 0.78, k=3: 0.64]
+              └─ Gittins:  [k=0: 0.7401, k=1: 0.7362, k=2: 0.7155, k=3: 0.6738, k=4: 0.0000]
+
+            ■ Node_4
+              ├─ Parent:   Node_2
+              ├─ Children: None (Leaf)
+              ├─ Cost (l): 2.26
+              ├─ Lockout:  q = 4
+              ├─ Probs:    [k=0: 0.72, k=1: 0.57, k=2: 0.51, k=3: 0.12]
+              └─ Gittins:  [k=0: 0.7383, k=1: 0.6901, k=2: 0.6682, k=3: 0.3275, k=4: 0.0000]
+
+        ■ Node_5
+          ├─ Parent:   Node_1
+          ├─ Children: Node_6
+          ├─ Cost (l): 3.02
+          ├─ Lockout:  q = 5
+          ├─ Probs:    [k=0: 0.88, k=1: 0.85, k=2: 0.75, k=3: 0.61, k=4: 0.42]
+          └─ Gittins:  [k=0: 0.5427, k=1: 0.5372, k=2: 0.5151, k=3: 0.4809, k=4: 0.4128, k=5: 0.0000]
+
+            ■ Node_6
+              ├─ Parent:   Node_5
+              ├─ Children: None (Leaf)
+              ├─ Cost (l): 1.75
+              ├─ Lockout:  q = 5
+              ├─ Probs:    [k=0: 0.69, k=1: 0.46, k=2: 0.45, k=3: 0.40, k=4: 0.33]
+              └─ Gittins:  [k=0: 0.7833, k=1: 0.7080, k=2: 0.7021, k=3: 0.6784, k=4: 0.6334, k=5: 0.0000]
+
+
+==================================================
+      STARTING ADAPTIVE ATTACK SIMULATION         
+==================================================
+
+--- Step 1 ---
+Current Frontier : [Node_0 (g=0.2869)]
+Action           : Attacking Node_0 (Attempt 1 of 5)
+Stats            : Time Cost = 3.93, Success Prob = 0.733
+Outcome          : SUCCESS! (Rolled 0.716 < 0.733)
+Update           : Node_0 bypassed. Unlocked children: ['Node_1']
+
+--- Step 2 ---
+Current Frontier : [Node_1 (g=0.4830)]
+Action           : Attacking Node_1 (Attempt 1 of 4)
+Stats            : Time Cost = 1.56, Success Prob = 0.895
+Outcome          : SUCCESS! (Rolled 0.195 < 0.895)
+Update           : Node_1 bypassed. Unlocked children: ['Node_2', 'Node_5']
+
+--- Step 3 ---
+Current Frontier : [Node_2 (g=0.5775), Node_5 (g=0.5427)]
+Action           : Attacking Node_2 (Attempt 1 of 3)
+Stats            : Time Cost = 2.19, Success Prob = 0.872
+Outcome          : SUCCESS! (Rolled 0.212 < 0.872)
+Update           : Node_2 bypassed. Unlocked children: ['Node_3', 'Node_4']
+
+--- Step 4 ---
+Current Frontier : [Node_5 (g=0.5427), Node_3 (g=0.7401), Node_4 (g=0.7383)]
+Action           : Attacking Node_3 (Attempt 1 of 4)
+Stats            : Time Cost = 2.70, Success Prob = 0.882
+Outcome          : SUCCESS! (Rolled 0.428 < 0.882)
+
+==================================================
+ TARGET COMPROMISED! Attacker wins.
+ Total time elapsed: 10.37 units.
+==================================================

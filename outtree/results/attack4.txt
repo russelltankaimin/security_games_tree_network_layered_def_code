@@ -1,0 +1,143 @@
+■ Node_0
+  ├─ Parent:   None (Root)
+  ├─ Children: Node_1
+  ├─ Cost (l): 1.25
+  ├─ Lockout:  q = 3
+  ├─ Probs:    [k=0: 0.85, k=1: 0.53, k=2: 0.14]
+  └─ Gittins:  [k=0: 0.3526, k=1: 0.3254, k=2: 0.2112, k=3: 0.0000]
+
+    ■ Node_1
+      ├─ Parent:   Node_0
+      ├─ Children: Node_2, Node_5
+      ├─ Cost (l): 2.69
+      ├─ Lockout:  q = 5
+      ├─ Probs:    [k=0: 0.78, k=1: 0.70, k=2: 0.70, k=3: 0.64, k=4: 0.32]
+      └─ Gittins:  [k=0: 0.4098, k=1: 0.3976, k=2: 0.3975, k=3: 0.3864, k=4: 0.2930, k=5: 0.0000]
+
+        ■ Node_2
+          ├─ Parent:   Node_1
+          ├─ Children: Node_3, Node_4
+          ├─ Cost (l): 2.68
+          ├─ Lockout:  q = 3
+          ├─ Probs:    [k=0: 0.46, k=1: 0.38, k=2: 0.12]
+          └─ Gittins:  [k=0: 0.4541, k=1: 0.4189, k=2: 0.2119, k=3: 0.0000]
+
+            ■ Node_3
+              ├─ Parent:   Node_2
+              ├─ Children: None (Leaf)
+              ├─ Cost (l): 3.86
+              ├─ Lockout:  q = 5
+              ├─ Probs:    [k=0: 0.84, k=1: 0.57, k=2: 0.55, k=3: 0.47, k=4: 0.33]
+              └─ Gittins:  [k=0: 0.6402, k=1: 0.5474, k=2: 0.5376, k=3: 0.4972, k=4: 0.4099, k=5: 0.0000]
+
+            ■ Node_4
+              ├─ Parent:   Node_2
+              ├─ Children: None (Leaf)
+              ├─ Cost (l): 2.41
+              ├─ Lockout:  q = 5
+              ├─ Probs:    [k=0: 0.87, k=1: 0.68, k=2: 0.66, k=3: 0.51, k=4: 0.30]
+              └─ Gittins:  [k=0: 0.7628, k=1: 0.7136, k=2: 0.7079, k=3: 0.6522, k=4: 0.5281, k=5: 0.0000]
+
+        ■ Node_5
+          ├─ Parent:   Node_1
+          ├─ Children: Node_6, Node_7
+          ├─ Cost (l): 2.89
+          ├─ Lockout:  q = 5
+          ├─ Probs:    [k=0: 0.87, k=1: 0.68, k=2: 0.38, k=3: 0.19, k=4: 0.18]
+          └─ Gittins:  [k=0: 0.5793, k=1: 0.5355, k=2: 0.4278, k=3: 0.2900, k=4: 0.2774, k=5: 0.0000]
+
+            ■ Node_6
+              ├─ Parent:   Node_5
+              ├─ Children: None (Leaf)
+              ├─ Cost (l): 1.96
+              ├─ Lockout:  q = 4
+              ├─ Probs:    [k=0: 0.45, k=1: 0.43, k=2: 0.36, k=3: 0.12]
+              └─ Gittins:  [k=0: 0.6733, k=1: 0.6622, k=2: 0.6240, k=3: 0.3611, k=4: 0.0000]
+
+            ■ Node_7
+              ├─ Parent:   Node_5
+              ├─ Children: None (Leaf)
+              ├─ Cost (l): 1.43
+              ├─ Lockout:  q = 4
+              ├─ Probs:    [k=0: 0.72, k=1: 0.53, k=2: 0.29, k=3: 0.19]
+              └─ Gittins:  [k=0: 0.8239, k=1: 0.7757, k=2: 0.6525, k=3: 0.5505, k=4: 0.0000]
+
+
+==================================================
+      STARTING ADAPTIVE ATTACK SIMULATION         
+==================================================
+
+--- Step 1 ---
+Current Frontier : [Node_0 (g=0.3526)]
+Action           : Attacking Node_0 (Attempt 1 of 3)
+Stats            : Time Cost = 1.25, Success Prob = 0.855
+Outcome          : SUCCESS! (Rolled 0.205 < 0.855)
+Update           : Node_0 bypassed. Unlocked children: ['Node_1']
+
+--- Step 2 ---
+Current Frontier : [Node_1 (g=0.4098)]
+Action           : Attacking Node_1 (Attempt 1 of 5)
+Stats            : Time Cost = 2.69, Success Prob = 0.776
+Outcome          : SUCCESS! (Rolled 0.631 < 0.776)
+Update           : Node_1 bypassed. Unlocked children: ['Node_2', 'Node_5']
+
+--- Step 3 ---
+Current Frontier : [Node_2 (g=0.4541), Node_5 (g=0.5793)]
+Action           : Attacking Node_5 (Attempt 1 of 5)
+Stats            : Time Cost = 2.89, Success Prob = 0.874
+Outcome          : FAILURE. (Rolled 0.927 >= 0.874)
+Update           : Node_5 state degrades to k=1. New Gittins index: 0.5355
+
+--- Step 4 ---
+Current Frontier : [Node_2 (g=0.4541), Node_5 (g=0.5355)]
+Action           : Attacking Node_5 (Attempt 2 of 5)
+Stats            : Time Cost = 2.89, Success Prob = 0.676
+Outcome          : FAILURE. (Rolled 0.997 >= 0.676)
+Update           : Node_5 state degrades to k=2. New Gittins index: 0.4278
+
+--- Step 5 ---
+Current Frontier : [Node_2 (g=0.4541), Node_5 (g=0.4278)]
+Action           : Attacking Node_2 (Attempt 1 of 3)
+Stats            : Time Cost = 2.68, Success Prob = 0.461
+Outcome          : FAILURE. (Rolled 0.573 >= 0.461)
+Update           : Node_2 state degrades to k=1. New Gittins index: 0.4189
+
+--- Step 6 ---
+Current Frontier : [Node_2 (g=0.4189), Node_5 (g=0.4278)]
+Action           : Attacking Node_5 (Attempt 3 of 5)
+Stats            : Time Cost = 2.89, Success Prob = 0.384
+Outcome          : FAILURE. (Rolled 0.599 >= 0.384)
+Update           : Node_5 state degrades to k=3. New Gittins index: 0.2900
+
+--- Step 7 ---
+Current Frontier : [Node_2 (g=0.4189), Node_5 (g=0.2900)]
+Action           : Attacking Node_2 (Attempt 2 of 3)
+Stats            : Time Cost = 2.68, Success Prob = 0.381
+Outcome          : FAILURE. (Rolled 0.640 >= 0.381)
+Update           : Node_2 state degrades to k=2. New Gittins index: 0.2119
+
+--- Step 8 ---
+Current Frontier : [Node_2 (g=0.2119), Node_5 (g=0.2900)]
+Action           : Attacking Node_5 (Attempt 4 of 5)
+Stats            : Time Cost = 2.89, Success Prob = 0.190
+Outcome          : FAILURE. (Rolled 0.553 >= 0.190)
+Update           : Node_5 state degrades to k=4. New Gittins index: 0.2774
+
+--- Step 9 ---
+Current Frontier : [Node_2 (g=0.2119), Node_5 (g=0.2774)]
+Action           : Attacking Node_5 (Attempt 5 of 5)
+Stats            : Time Cost = 2.89, Success Prob = 0.178
+Outcome          : FAILURE. (Rolled 0.756 >= 0.178)
+Update           : LOCKOUT. Maximum attempts reached. Node_5 is permanently sealed.
+
+--- Step 10 ---
+Current Frontier : [Node_2 (g=0.2119)]
+Action           : Attacking Node_2 (Attempt 3 of 3)
+Stats            : Time Cost = 2.68, Success Prob = 0.119
+Outcome          : FAILURE. (Rolled 0.469 >= 0.119)
+Update           : LOCKOUT. Maximum attempts reached. Node_2 is permanently sealed.
+
+==================================================
+ ATTACK DEFEATED! All available paths have been locked out.
+ Total time wasted by attacker: 26.40 units.
+==================================================

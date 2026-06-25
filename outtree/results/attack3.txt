@@ -1,0 +1,83 @@
+Exact Gittins indices successfully computed using symbolic piecewise functions.
+■ Node_0
+  ├─ Parent:   None (Root)
+  ├─ Children: Node_1
+  ├─ Cost (l): 1.17
+  ├─ Lockout:  q = 3
+  ├─ Probs:    [k=0: 0.60, k=1: 0.57, k=2: 0.53]
+  └─ Gittins:  [k=0: 0.2474, k=1: 0.2454, k=2: 0.2424, k=3: 0.0000]
+
+    ■ Node_1
+      ├─ Parent:   Node_0
+      ├─ Children: Node_2
+      ├─ Cost (l): 3.96
+      ├─ Lockout:  q = 4
+      ├─ Probs:    [k=0: 0.89, k=1: 0.58, k=2: 0.50, k=3: 0.28]
+      └─ Gittins:  [k=0: 0.3053, k=1: 0.2564, k=2: 0.2365, k=3: 0.1685, k=4: 0.0000]
+
+        ■ Node_2
+          ├─ Parent:   Node_1
+          ├─ Children: Node_3
+          ├─ Cost (l): 1.93
+          ├─ Lockout:  q = 5
+          ├─ Probs:    [k=0: 0.63, k=1: 0.36, k=2: 0.27, k=3: 0.24, k=4: 0.20]
+          └─ Gittins:  [k=0: 0.5157, k=1: 0.4301, k=2: 0.3839, k=3: 0.3619, k=4: 0.3305, k=5: 0.0000]
+
+            ■ Node_3
+              ├─ Parent:   Node_2
+              ├─ Children: None (Leaf)
+              ├─ Cost (l): 2.95
+              ├─ Lockout:  q = 3
+              ├─ Probs:    [k=0: 0.81, k=1: 0.67, k=2: 0.11]
+              └─ Gittins:  [k=0: 0.7013, k=1: 0.6593, k=2: 0.2465, k=3: 0.0000]
+
+
+==================================================
+      STARTING ADAPTIVE ATTACK SIMULATION         
+==================================================
+
+--- Step 1 ---
+Current Frontier : [Node_0 (g=0.2474)]
+Action           : Attacking Node_0 (Attempt 1 of 3)
+Stats            : Time Cost = 1.17, Success Prob = 0.596
+Outcome          : SUCCESS! (Rolled 0.124 < 0.596)
+Update           : Node_0 bypassed. Unlocked children: ['Node_1']
+
+--- Step 2 ---
+Current Frontier : [Node_1 (g=0.3053)]
+Action           : Attacking Node_1 (Attempt 1 of 4)
+Stats            : Time Cost = 3.96, Success Prob = 0.887
+Outcome          : FAILURE. (Rolled 0.942 >= 0.887)
+Update           : Node_1 state degrades to k=1. New Gittins index: 0.2564
+
+--- Step 3 ---
+Current Frontier : [Node_1 (g=0.2564)]
+Action           : Attacking Node_1 (Attempt 2 of 4)
+Stats            : Time Cost = 3.96, Success Prob = 0.585
+Outcome          : SUCCESS! (Rolled 0.178 < 0.585)
+Update           : Node_1 bypassed. Unlocked children: ['Node_2']
+
+--- Step 4 ---
+Current Frontier : [Node_2 (g=0.5157)]
+Action           : Attacking Node_2 (Attempt 1 of 5)
+Stats            : Time Cost = 1.93, Success Prob = 0.631
+Outcome          : FAILURE. (Rolled 0.787 >= 0.631)
+Update           : Node_2 state degrades to k=1. New Gittins index: 0.4301
+
+--- Step 5 ---
+Current Frontier : [Node_2 (g=0.4301)]
+Action           : Attacking Node_2 (Attempt 2 of 5)
+Stats            : Time Cost = 1.93, Success Prob = 0.357
+Outcome          : SUCCESS! (Rolled 0.057 < 0.357)
+Update           : Node_2 bypassed. Unlocked children: ['Node_3']
+
+--- Step 6 ---
+Current Frontier : [Node_3 (g=0.7013)]
+Action           : Attacking Node_3 (Attempt 1 of 3)
+Stats            : Time Cost = 2.95, Success Prob = 0.807
+Outcome          : SUCCESS! (Rolled 0.118 < 0.807)
+
+==================================================
+ TARGET COMPROMISED! Attacker wins.
+ Total time elapsed: 15.92 units.
+==================================================

@@ -1,0 +1,886 @@
+■ Node_0
+  ├─ Parent:   None (Root)
+  ├─ Children: Node_1, Node_24, Node_49
+  ├─ Cost (l): 3.06
+  ├─ Lockout:  q = 3
+  └─ Probs:    [k=0: 0.86, k=1: 0.40, k=2: 0.23]
+
+    ■ Node_1
+      ├─ Parent:   Node_0
+      ├─ Children: Node_2, Node_11
+      ├─ Cost (l): 1.38
+      ├─ Lockout:  q = 4
+      └─ Probs:    [k=0: 0.63, k=1: 0.31, k=2: 0.21, k=3: 0.17]
+
+        ■ Node_2
+          ├─ Parent:   Node_1
+          ├─ Children: Node_3
+          ├─ Cost (l): 1.17
+          ├─ Lockout:  q = 5
+          └─ Probs:    [k=0: 0.68, k=1: 0.64, k=2: 0.45, k=3: 0.43, k=4: 0.30]
+
+            ■ Node_3
+              ├─ Parent:   Node_2
+              ├─ Children: Node_4, Node_6, Node_8
+              ├─ Cost (l): 1.50
+              ├─ Lockout:  q = 3
+              └─ Probs:    [k=0: 0.74, k=1: 0.47, k=2: 0.11]
+
+                ■ Node_4
+                  ├─ Parent:   Node_3
+                  ├─ Children: Node_5
+                  ├─ Cost (l): 1.07
+                  ├─ Lockout:  q = 3
+                  └─ Probs:    [k=0: 0.43, k=1: 0.22, k=2: 0.13]
+
+                    ■ Node_5
+                      ├─ Parent:   Node_4
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.82
+                      ├─ Lockout:  q = 3
+                      └─ Probs:    [k=0: 0.30, k=1: 0.21, k=2: 0.20]
+
+                ■ Node_6
+                  ├─ Parent:   Node_3
+                  ├─ Children: Node_7
+                  ├─ Cost (l): 1.99
+                  ├─ Lockout:  q = 3
+                  └─ Probs:    [k=0: 0.50, k=1: 0.42, k=2: 0.32]
+
+                    ■ Node_7
+                      ├─ Parent:   Node_6
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.39
+                      ├─ Lockout:  q = 5
+                      └─ Probs:    [k=0: 0.87, k=1: 0.84, k=2: 0.82, k=3: 0.61, k=4: 0.30]
+
+                ■ Node_8
+                  ├─ Parent:   Node_3
+                  ├─ Children: Node_9, Node_10
+                  ├─ Cost (l): 2.60
+                  ├─ Lockout:  q = 3
+                  └─ Probs:    [k=0: 0.70, k=1: 0.62, k=2: 0.42]
+
+                    ■ Node_9
+                      ├─ Parent:   Node_8
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.67
+                      ├─ Lockout:  q = 5
+                      └─ Probs:    [k=0: 0.88, k=1: 0.71, k=2: 0.71, k=3: 0.61, k=4: 0.38]
+
+                    ■ Node_10
+                      ├─ Parent:   Node_8
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.41
+                      ├─ Lockout:  q = 3
+                      └─ Probs:    [k=0: 0.53, k=1: 0.11, k=2: 0.10]
+
+        ■ Node_11
+          ├─ Parent:   Node_1
+          ├─ Children: Node_12, Node_17
+          ├─ Cost (l): 2.35
+          ├─ Lockout:  q = 3
+          └─ Probs:    [k=0: 0.61, k=1: 0.35, k=2: 0.12]
+
+            ■ Node_12
+              ├─ Parent:   Node_11
+              ├─ Children: Node_13
+              ├─ Cost (l): 2.01
+              ├─ Lockout:  q = 4
+              └─ Probs:    [k=0: 0.89, k=1: 0.45, k=2: 0.40, k=3: 0.34]
+
+                ■ Node_13
+                  ├─ Parent:   Node_12
+                  ├─ Children: Node_14, Node_15, Node_16
+                  ├─ Cost (l): 2.44
+                  ├─ Lockout:  q = 3
+                  └─ Probs:    [k=0: 0.59, k=1: 0.50, k=2: 0.14]
+
+                    ■ Node_14
+                      ├─ Parent:   Node_13
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.49
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.85, k=1: 0.60, k=2: 0.43, k=3: 0.23]
+
+                    ■ Node_15
+                      ├─ Parent:   Node_13
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.59
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.88, k=1: 0.87, k=2: 0.86, k=3: 0.33]
+
+                    ■ Node_16
+                      ├─ Parent:   Node_13
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.04
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.49, k=1: 0.38, k=2: 0.16, k=3: 0.10]
+
+            ■ Node_17
+              ├─ Parent:   Node_11
+              ├─ Children: Node_18, Node_20
+              ├─ Cost (l): 3.90
+              ├─ Lockout:  q = 4
+              └─ Probs:    [k=0: 0.87, k=1: 0.65, k=2: 0.32, k=3: 0.24]
+
+                ■ Node_18
+                  ├─ Parent:   Node_17
+                  ├─ Children: Node_19
+                  ├─ Cost (l): 2.95
+                  ├─ Lockout:  q = 5
+                  └─ Probs:    [k=0: 0.77, k=1: 0.69, k=2: 0.66, k=3: 0.18, k=4: 0.10]
+
+                    ■ Node_19
+                      ├─ Parent:   Node_18
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.06
+                      ├─ Lockout:  q = 3
+                      └─ Probs:    [k=0: 0.54, k=1: 0.44, k=2: 0.21]
+
+                ■ Node_20
+                  ├─ Parent:   Node_17
+                  ├─ Children: Node_21, Node_22, Node_23
+                  ├─ Cost (l): 3.44
+                  ├─ Lockout:  q = 5
+                  └─ Probs:    [k=0: 0.79, k=1: 0.70, k=2: 0.40, k=3: 0.40, k=4: 0.38]
+
+                    ■ Node_21
+                      ├─ Parent:   Node_20
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.79
+                      ├─ Lockout:  q = 3
+                      └─ Probs:    [k=0: 0.87, k=1: 0.48, k=2: 0.32]
+
+                    ■ Node_22
+                      ├─ Parent:   Node_20
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.66
+                      ├─ Lockout:  q = 5
+                      └─ Probs:    [k=0: 0.89, k=1: 0.87, k=2: 0.43, k=3: 0.12, k=4: 0.12]
+
+                    ■ Node_23
+                      ├─ Parent:   Node_20
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.20
+                      ├─ Lockout:  q = 5
+                      └─ Probs:    [k=0: 0.86, k=1: 0.79, k=2: 0.58, k=3: 0.45, k=4: 0.21]
+
+    ■ Node_24
+      ├─ Parent:   Node_0
+      ├─ Children: Node_25
+      ├─ Cost (l): 2.63
+      ├─ Lockout:  q = 3
+      └─ Probs:    [k=0: 0.82, k=1: 0.45, k=2: 0.27]
+
+        ■ Node_25
+          ├─ Parent:   Node_24
+          ├─ Children: Node_26, Node_37, Node_42
+          ├─ Cost (l): 1.06
+          ├─ Lockout:  q = 5
+          └─ Probs:    [k=0: 0.83, k=1: 0.81, k=2: 0.46, k=3: 0.43, k=4: 0.20]
+
+            ■ Node_26
+              ├─ Parent:   Node_25
+              ├─ Children: Node_27, Node_30, Node_34
+              ├─ Cost (l): 1.44
+              ├─ Lockout:  q = 3
+              └─ Probs:    [k=0: 0.57, k=1: 0.27, k=2: 0.25]
+
+                ■ Node_27
+                  ├─ Parent:   Node_26
+                  ├─ Children: Node_28, Node_29
+                  ├─ Cost (l): 2.94
+                  ├─ Lockout:  q = 3
+                  └─ Probs:    [k=0: 0.89, k=1: 0.74, k=2: 0.21]
+
+                    ■ Node_28
+                      ├─ Parent:   Node_27
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.57
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.75, k=1: 0.67, k=2: 0.58, k=3: 0.37]
+
+                    ■ Node_29
+                      ├─ Parent:   Node_27
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.38
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.76, k=1: 0.52, k=2: 0.49, k=3: 0.38]
+
+                ■ Node_30
+                  ├─ Parent:   Node_26
+                  ├─ Children: Node_31, Node_32, Node_33
+                  ├─ Cost (l): 2.04
+                  ├─ Lockout:  q = 5
+                  └─ Probs:    [k=0: 0.80, k=1: 0.60, k=2: 0.48, k=3: 0.45, k=4: 0.32]
+
+                    ■ Node_31
+                      ├─ Parent:   Node_30
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.93
+                      ├─ Lockout:  q = 5
+                      └─ Probs:    [k=0: 0.66, k=1: 0.52, k=2: 0.21, k=3: 0.14, k=4: 0.13]
+
+                    ■ Node_32
+                      ├─ Parent:   Node_30
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.11
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.64, k=1: 0.56, k=2: 0.29, k=3: 0.22]
+
+                    ■ Node_33
+                      ├─ Parent:   Node_30
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.89
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.65, k=1: 0.60, k=2: 0.32, k=3: 0.15]
+
+                ■ Node_34
+                  ├─ Parent:   Node_26
+                  ├─ Children: Node_35, Node_36
+                  ├─ Cost (l): 2.86
+                  ├─ Lockout:  q = 4
+                  └─ Probs:    [k=0: 0.80, k=1: 0.69, k=2: 0.69, k=3: 0.63]
+
+                    ■ Node_35
+                      ├─ Parent:   Node_34
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.35
+                      ├─ Lockout:  q = 3
+                      └─ Probs:    [k=0: 0.48, k=1: 0.18, k=2: 0.14]
+
+                    ■ Node_36
+                      ├─ Parent:   Node_34
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.79
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.87, k=1: 0.84, k=2: 0.72, k=3: 0.38]
+
+            ■ Node_37
+              ├─ Parent:   Node_25
+              ├─ Children: Node_38
+              ├─ Cost (l): 1.91
+              ├─ Lockout:  q = 4
+              └─ Probs:    [k=0: 0.78, k=1: 0.33, k=2: 0.25, k=3: 0.23]
+
+                ■ Node_38
+                  ├─ Parent:   Node_37
+                  ├─ Children: Node_39, Node_40, Node_41
+                  ├─ Cost (l): 1.87
+                  ├─ Lockout:  q = 4
+                  └─ Probs:    [k=0: 0.73, k=1: 0.59, k=2: 0.57, k=3: 0.48]
+
+                    ■ Node_39
+                      ├─ Parent:   Node_38
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.64
+                      ├─ Lockout:  q = 3
+                      └─ Probs:    [k=0: 0.86, k=1: 0.32, k=2: 0.15]
+
+                    ■ Node_40
+                      ├─ Parent:   Node_38
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.41
+                      ├─ Lockout:  q = 5
+                      └─ Probs:    [k=0: 0.64, k=1: 0.26, k=2: 0.25, k=3: 0.20, k=4: 0.10]
+
+                    ■ Node_41
+                      ├─ Parent:   Node_38
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.02
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.82, k=1: 0.23, k=2: 0.13, k=3: 0.12]
+
+            ■ Node_42
+              ├─ Parent:   Node_25
+              ├─ Children: Node_43, Node_47
+              ├─ Cost (l): 2.81
+              ├─ Lockout:  q = 5
+              └─ Probs:    [k=0: 0.71, k=1: 0.57, k=2: 0.41, k=3: 0.28, k=4: 0.12]
+
+                ■ Node_43
+                  ├─ Parent:   Node_42
+                  ├─ Children: Node_44, Node_45, Node_46
+                  ├─ Cost (l): 1.44
+                  ├─ Lockout:  q = 3
+                  └─ Probs:    [k=0: 0.82, k=1: 0.15, k=2: 0.15]
+
+                    ■ Node_44
+                      ├─ Parent:   Node_43
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.38
+                      ├─ Lockout:  q = 5
+                      └─ Probs:    [k=0: 0.77, k=1: 0.70, k=2: 0.47, k=3: 0.46, k=4: 0.43]
+
+                    ■ Node_45
+                      ├─ Parent:   Node_43
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.93
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.67, k=1: 0.64, k=2: 0.38, k=3: 0.11]
+
+                    ■ Node_46
+                      ├─ Parent:   Node_43
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.45
+                      ├─ Lockout:  q = 3
+                      └─ Probs:    [k=0: 0.58, k=1: 0.53, k=2: 0.45]
+
+                ■ Node_47
+                  ├─ Parent:   Node_42
+                  ├─ Children: Node_48
+                  ├─ Cost (l): 1.56
+                  ├─ Lockout:  q = 4
+                  └─ Probs:    [k=0: 0.81, k=1: 0.45, k=2: 0.43, k=3: 0.40]
+
+                    ■ Node_48
+                      ├─ Parent:   Node_47
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.37
+                      ├─ Lockout:  q = 3
+                      └─ Probs:    [k=0: 0.79, k=1: 0.23, k=2: 0.16]
+
+    ■ Node_49
+      ├─ Parent:   Node_0
+      ├─ Children: Node_50
+      ├─ Cost (l): 2.84
+      ├─ Lockout:  q = 5
+      └─ Probs:    [k=0: 0.90, k=1: 0.81, k=2: 0.53, k=3: 0.46, k=4: 0.14]
+
+        ■ Node_50
+          ├─ Parent:   Node_49
+          ├─ Children: Node_51
+          ├─ Cost (l): 3.64
+          ├─ Lockout:  q = 4
+          └─ Probs:    [k=0: 0.48, k=1: 0.44, k=2: 0.40, k=3: 0.26]
+
+            ■ Node_51
+              ├─ Parent:   Node_50
+              ├─ Children: Node_52, Node_54, Node_56
+              ├─ Cost (l): 1.13
+              ├─ Lockout:  q = 4
+              └─ Probs:    [k=0: 0.79, k=1: 0.74, k=2: 0.63, k=3: 0.33]
+
+                ■ Node_52
+                  ├─ Parent:   Node_51
+                  ├─ Children: Node_53
+                  ├─ Cost (l): 1.31
+                  ├─ Lockout:  q = 3
+                  └─ Probs:    [k=0: 0.74, k=1: 0.54, k=2: 0.21]
+
+                    ■ Node_53
+                      ├─ Parent:   Node_52
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.45
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.53, k=1: 0.50, k=2: 0.34, k=3: 0.22]
+
+                ■ Node_54
+                  ├─ Parent:   Node_51
+                  ├─ Children: Node_55
+                  ├─ Cost (l): 2.51
+                  ├─ Lockout:  q = 4
+                  └─ Probs:    [k=0: 0.73, k=1: 0.72, k=2: 0.58, k=3: 0.55]
+
+                    ■ Node_55
+                      ├─ Parent:   Node_54
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.14
+                      ├─ Lockout:  q = 5
+                      └─ Probs:    [k=0: 0.77, k=1: 0.61, k=2: 0.56, k=3: 0.53, k=4: 0.13]
+
+                ■ Node_56
+                  ├─ Parent:   Node_51
+                  ├─ Children: Node_57, Node_58
+                  ├─ Cost (l): 2.99
+                  ├─ Lockout:  q = 4
+                  └─ Probs:    [k=0: 0.89, k=1: 0.87, k=2: 0.86, k=3: 0.76]
+
+                    ■ Node_57
+                      ├─ Parent:   Node_56
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.55
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.64, k=1: 0.41, k=2: 0.37, k=3: 0.12]
+
+                    ■ Node_58
+                      ├─ Parent:   Node_56
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.80
+                      ├─ Lockout:  q = 4
+                      └─ Probs:    [k=0: 0.83, k=1: 0.67, k=2: 0.21, k=3: 0.12]
+
+Exact Gittins indices successfully computed using symbolic piecewise functions.
+■ Node_0
+  ├─ Parent:   None (Root)
+  ├─ Children: Node_1, Node_24, Node_49
+  ├─ Cost (l): 3.06
+  ├─ Lockout:  q = 3
+  ├─ Probs:    [k=0: 0.86, k=1: 0.40, k=2: 0.23]
+  └─ Gittins:  [k=0: 0.0000, k=1: 0.0000, k=2: 0.0000, k=3: 0.0000]
+
+    ■ Node_1
+      ├─ Parent:   Node_0
+      ├─ Children: Node_2, Node_11
+      ├─ Cost (l): 1.38
+      ├─ Lockout:  q = 4
+      ├─ Probs:    [k=0: 0.63, k=1: 0.31, k=2: 0.21, k=3: 0.17]
+      └─ Gittins:  [k=0: 0.0003, k=1: 0.0002, k=2: 0.0001, k=3: 0.0001, k=4: 0.0000]
+
+        ■ Node_2
+          ├─ Parent:   Node_1
+          ├─ Children: Node_3
+          ├─ Cost (l): 1.17
+          ├─ Lockout:  q = 5
+          ├─ Probs:    [k=0: 0.68, k=1: 0.64, k=2: 0.45, k=3: 0.43, k=4: 0.30]
+          └─ Gittins:  [k=0: 0.0012, k=1: 0.0012, k=2: 0.0009, k=3: 0.0009, k=4: 0.0006, k=5: 0.0000]
+
+            ■ Node_3
+              ├─ Parent:   Node_2
+              ├─ Children: Node_4, Node_6, Node_8
+              ├─ Cost (l): 1.50
+              ├─ Lockout:  q = 3
+              ├─ Probs:    [k=0: 0.74, k=1: 0.47, k=2: 0.11]
+              └─ Gittins:  [k=0: 0.0041, k=1: 0.0028, k=2: 0.0008, k=3: 0.0000]
+
+                ■ Node_4
+                  ├─ Parent:   Node_3
+                  ├─ Children: Node_5
+                  ├─ Cost (l): 1.07
+                  ├─ Lockout:  q = 3
+                  ├─ Probs:    [k=0: 0.43, k=1: 0.22, k=2: 0.13]
+                  └─ Gittins:  [k=0: 0.0191, k=1: 0.0113, k=2: 0.0069, k=3: 0.0000]
+
+                    ■ Node_5
+                      ├─ Parent:   Node_4
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.82
+                      ├─ Lockout:  q = 3
+                      ├─ Probs:    [k=0: 0.30, k=1: 0.21, k=2: 0.20]
+                      └─ Gittins:  [k=0: 0.0837, k=1: 0.0608, k=2: 0.0568, k=3: 0.0000]
+
+                ■ Node_6
+                  ├─ Parent:   Node_3
+                  ├─ Children: Node_7
+                  ├─ Cost (l): 1.99
+                  ├─ Lockout:  q = 3
+                  ├─ Probs:    [k=0: 0.50, k=1: 0.42, k=2: 0.32]
+                  └─ Gittins:  [k=0: 0.0066, k=1: 0.0056, k=2: 0.0044, k=3: 0.0000]
+
+                    ■ Node_7
+                      ├─ Parent:   Node_6
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.39
+                      ├─ Lockout:  q = 5
+                      ├─ Probs:    [k=0: 0.87, k=1: 0.84, k=2: 0.82, k=3: 0.61, k=4: 0.30]
+                      └─ Gittins:  [k=0: 0.0581, k=1: 0.0560, k=2: 0.0548, k=3: 0.0413, k=4: 0.0211, k=5: 0.0000]
+
+                ■ Node_8
+                  ├─ Parent:   Node_3
+                  ├─ Children: Node_9, Node_10
+                  ├─ Cost (l): 2.60
+                  ├─ Lockout:  q = 3
+                  ├─ Probs:    [k=0: 0.70, k=1: 0.62, k=2: 0.42]
+                  └─ Gittins:  [k=0: 0.0043, k=1: 0.0038, k=2: 0.0027, k=3: 0.0000]
+
+                    ■ Node_9
+                      ├─ Parent:   Node_8
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.67
+                      ├─ Lockout:  q = 5
+                      ├─ Probs:    [k=0: 0.88, k=1: 0.71, k=2: 0.71, k=3: 0.61, k=4: 0.38]
+                      └─ Gittins:  [k=0: 0.0472, k=1: 0.0384, k=2: 0.0382, k=3: 0.0329, k=4: 0.0210, k=5: 0.0000]
+
+                    ■ Node_10
+                      ├─ Parent:   Node_8
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.41
+                      ├─ Lockout:  q = 3
+                      ├─ Probs:    [k=0: 0.53, k=1: 0.11, k=2: 0.10]
+                      └─ Gittins:  [k=0: 0.0355, k=1: 0.0074, k=2: 0.0071, k=3: 0.0000]
+
+        ■ Node_11
+          ├─ Parent:   Node_1
+          ├─ Children: Node_12, Node_17
+          ├─ Cost (l): 2.35
+          ├─ Lockout:  q = 3
+          ├─ Probs:    [k=0: 0.61, k=1: 0.35, k=2: 0.12]
+          └─ Gittins:  [k=0: 0.0004, k=1: 0.0003, k=2: 0.0001, k=3: 0.0000]
+
+            ■ Node_12
+              ├─ Parent:   Node_11
+              ├─ Children: Node_13
+              ├─ Cost (l): 2.01
+              ├─ Lockout:  q = 4
+              ├─ Probs:    [k=0: 0.89, k=1: 0.45, k=2: 0.40, k=3: 0.34]
+              └─ Gittins:  [k=0: 0.0044, k=1: 0.0025, k=2: 0.0022, k=3: 0.0019, k=4: 0.0000]
+
+                ■ Node_13
+                  ├─ Parent:   Node_12
+                  ├─ Children: Node_14, Node_15, Node_16
+                  ├─ Cost (l): 2.44
+                  ├─ Lockout:  q = 3
+                  ├─ Probs:    [k=0: 0.59, k=1: 0.50, k=2: 0.14]
+                  └─ Gittins:  [k=0: 0.0244, k=1: 0.0207, k=2: 0.0060, k=3: 0.0000]
+
+                    ■ Node_14
+                      ├─ Parent:   Node_13
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.49
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.85, k=1: 0.60, k=2: 0.43, k=3: 0.23]
+                      └─ Gittins:  [k=0: 0.2723, k=1: 0.2071, k=2: 0.1572, k=3: 0.0903, k=4: 0.0000]
+
+                    ■ Node_15
+                      ├─ Parent:   Node_13
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.59
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.88, k=1: 0.87, k=2: 0.86, k=3: 0.33]
+                      └─ Gittins:  [k=0: 0.2564, k=1: 0.2534, k=2: 0.2510, k=3: 0.1151, k=4: 0.0000]
+
+                    ■ Node_16
+                      ├─ Parent:   Node_13
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.04
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.49, k=1: 0.38, k=2: 0.16, k=3: 0.10]
+                      └─ Gittins:  [k=0: 0.0455, k=1: 0.0350, k=2: 0.0152, k=3: 0.0099, k=4: 0.0000]
+
+            ■ Node_17
+              ├─ Parent:   Node_11
+              ├─ Children: Node_18, Node_20
+              ├─ Cost (l): 3.90
+              ├─ Lockout:  q = 4
+              ├─ Probs:    [k=0: 0.87, k=1: 0.65, k=2: 0.32, k=3: 0.24]
+              └─ Gittins:  [k=0: 0.0004, k=1: 0.0003, k=2: 0.0002, k=3: 0.0001, k=4: 0.0000]
+
+                ■ Node_18
+                  ├─ Parent:   Node_17
+                  ├─ Children: Node_19
+                  ├─ Cost (l): 2.95
+                  ├─ Lockout:  q = 5
+                  ├─ Probs:    [k=0: 0.77, k=1: 0.69, k=2: 0.66, k=3: 0.18, k=4: 0.10]
+                  └─ Gittins:  [k=0: 0.0083, k=1: 0.0075, k=2: 0.0072, k=3: 0.0021, k=4: 0.0012, k=5: 0.0000]
+
+                    ■ Node_19
+                      ├─ Parent:   Node_18
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.06
+                      ├─ Lockout:  q = 3
+                      ├─ Probs:    [k=0: 0.54, k=1: 0.44, k=2: 0.21]
+                      └─ Gittins:  [k=0: 0.1134, k=1: 0.0955, k=2: 0.0467, k=3: 0.0000]
+
+                ■ Node_20
+                  ├─ Parent:   Node_17
+                  ├─ Children: Node_21, Node_22, Node_23
+                  ├─ Cost (l): 3.44
+                  ├─ Lockout:  q = 5
+                  ├─ Probs:    [k=0: 0.79, k=1: 0.70, k=2: 0.40, k=3: 0.40, k=4: 0.38]
+                  └─ Gittins:  [k=0: 0.0108, k=1: 0.0096, k=2: 0.0056, k=3: 0.0056, k=4: 0.0053, k=5: 0.0000]
+
+                    ■ Node_21
+                      ├─ Parent:   Node_20
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.79
+                      ├─ Lockout:  q = 3
+                      ├─ Probs:    [k=0: 0.87, k=1: 0.48, k=2: 0.32]
+                      └─ Gittins:  [k=0: 0.2141, k=1: 0.1309, k=2: 0.0915, k=3: 0.0000]
+
+                    ■ Node_22
+                      ├─ Parent:   Node_20
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.66
+                      ├─ Lockout:  q = 5
+                      ├─ Probs:    [k=0: 0.89, k=1: 0.87, k=2: 0.43, k=3: 0.12, k=4: 0.12]
+                      └─ Gittins:  [k=0: 0.1080, k=1: 0.1058, k=2: 0.0549, k=3: 0.0166, k=4: 0.0154, k=5: 0.0000]
+
+                    ■ Node_23
+                      ├─ Parent:   Node_20
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.20
+                      ├─ Lockout:  q = 5
+                      ├─ Probs:    [k=0: 0.86, k=1: 0.79, k=2: 0.58, k=3: 0.45, k=4: 0.21]
+                      └─ Gittins:  [k=0: 0.1510, k=1: 0.1409, k=2: 0.1075, k=3: 0.0849, k=4: 0.0411, k=5: 0.0000]
+
+    ■ Node_24
+      ├─ Parent:   Node_0
+      ├─ Children: Node_25
+      ├─ Cost (l): 2.63
+      ├─ Lockout:  q = 3
+      ├─ Probs:    [k=0: 0.82, k=1: 0.45, k=2: 0.27]
+      └─ Gittins:  [k=0: 0.0003, k=1: 0.0002, k=2: 0.0001, k=3: 0.0000]
+
+        ■ Node_25
+          ├─ Parent:   Node_24
+          ├─ Children: Node_26, Node_37, Node_42
+          ├─ Cost (l): 1.06
+          ├─ Lockout:  q = 5
+          ├─ Probs:    [k=0: 0.83, k=1: 0.81, k=2: 0.46, k=3: 0.43, k=4: 0.20]
+          └─ Gittins:  [k=0: 0.0026, k=1: 0.0025, k=2: 0.0017, k=3: 0.0016, k=4: 0.0009, k=5: 0.0000]
+
+            ■ Node_26
+              ├─ Parent:   Node_25
+              ├─ Children: Node_27, Node_30, Node_34
+              ├─ Cost (l): 1.44
+              ├─ Lockout:  q = 3
+              ├─ Probs:    [k=0: 0.57, k=1: 0.27, k=2: 0.25]
+              └─ Gittins:  [k=0: 0.0043, k=1: 0.0023, k=2: 0.0021, k=3: 0.0000]
+
+                ■ Node_27
+                  ├─ Parent:   Node_26
+                  ├─ Children: Node_28, Node_29
+                  ├─ Cost (l): 2.94
+                  ├─ Lockout:  q = 3
+                  ├─ Probs:    [k=0: 0.89, k=1: 0.74, k=2: 0.21]
+                  └─ Gittins:  [k=0: 0.0085, k=1: 0.0071, k=2: 0.0022, k=3: 0.0000]
+
+                    ■ Node_28
+                      ├─ Parent:   Node_27
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.57
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.75, k=1: 0.67, k=2: 0.58, k=3: 0.37]
+                      └─ Gittins:  [k=0: 0.0992, k=1: 0.0893, k=2: 0.0782, k=3: 0.0520, k=4: 0.0000]
+
+                    ■ Node_29
+                      ├─ Parent:   Node_27
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.38
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.76, k=1: 0.52, k=2: 0.49, k=3: 0.38]
+                      └─ Gittins:  [k=0: 0.0521, k=1: 0.0360, k=2: 0.0339, k=3: 0.0263, k=4: 0.0000]
+
+                ■ Node_30
+                  ├─ Parent:   Node_26
+                  ├─ Children: Node_31, Node_32, Node_33
+                  ├─ Cost (l): 2.04
+                  ├─ Lockout:  q = 5
+                  ├─ Probs:    [k=0: 0.80, k=1: 0.60, k=2: 0.48, k=3: 0.45, k=4: 0.32]
+                  └─ Gittins:  [k=0: 0.0205, k=1: 0.0159, k=2: 0.0132, k=3: 0.0125, k=4: 0.0090, k=5: 0.0000]
+
+                    ■ Node_31
+                      ├─ Parent:   Node_30
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.93
+                      ├─ Lockout:  q = 5
+                      ├─ Probs:    [k=0: 0.66, k=1: 0.52, k=2: 0.21, k=3: 0.14, k=4: 0.13]
+                      └─ Gittins:  [k=0: 0.0652, k=1: 0.0518, k=2: 0.0215, k=3: 0.0146, k=4: 0.0133, k=5: 0.0000]
+
+                    ■ Node_32
+                      ├─ Parent:   Node_30
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.11
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.64, k=1: 0.56, k=2: 0.29, k=3: 0.22]
+                      └─ Gittins:  [k=0: 0.1272, k=1: 0.1119, k=2: 0.0614, k=3: 0.0481, k=4: 0.0000]
+
+                    ■ Node_33
+                      ├─ Parent:   Node_30
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.89
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.65, k=1: 0.60, k=2: 0.32, k=3: 0.15]
+                      └─ Gittins:  [k=0: 0.0670, k=1: 0.0616, k=2: 0.0339, k=3: 0.0162, k=4: 0.0000]
+
+                ■ Node_34
+                  ├─ Parent:   Node_26
+                  ├─ Children: Node_35, Node_36
+                  ├─ Cost (l): 2.86
+                  ├─ Lockout:  q = 4
+                  ├─ Probs:    [k=0: 0.80, k=1: 0.69, k=2: 0.69, k=3: 0.63]
+                  └─ Gittins:  [k=0: 0.0176, k=1: 0.0154, k=2: 0.0153, k=3: 0.0142, k=4: 0.0000]
+
+                    ■ Node_35
+                      ├─ Parent:   Node_34
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.35
+                      ├─ Lockout:  q = 3
+                      ├─ Probs:    [k=0: 0.48, k=1: 0.18, k=2: 0.14]
+                      └─ Gittins:  [k=0: 0.0792, k=1: 0.0316, k=2: 0.0248, k=3: 0.0000]
+
+                    ■ Node_36
+                      ├─ Parent:   Node_34
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.79
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.87, k=1: 0.84, k=2: 0.72, k=3: 0.38]
+                      └─ Gittins:  [k=0: 0.2138, k=1: 0.2087, k=2: 0.1848, k=3: 0.1057, k=4: 0.0000]
+
+            ■ Node_37
+              ├─ Parent:   Node_25
+              ├─ Children: Node_38
+              ├─ Cost (l): 1.91
+              ├─ Lockout:  q = 4
+              ├─ Probs:    [k=0: 0.78, k=1: 0.33, k=2: 0.25, k=3: 0.23]
+              └─ Gittins:  [k=0: 0.0068, k=1: 0.0032, k=2: 0.0024, k=3: 0.0023, k=4: 0.0000]
+
+                ■ Node_38
+                  ├─ Parent:   Node_37
+                  ├─ Children: Node_39, Node_40, Node_41
+                  ├─ Cost (l): 1.87
+                  ├─ Lockout:  q = 4
+                  ├─ Probs:    [k=0: 0.73, k=1: 0.59, k=2: 0.57, k=3: 0.48]
+                  └─ Gittins:  [k=0: 0.0386, k=1: 0.0321, k=2: 0.0315, k=3: 0.0269, k=4: 0.0000]
+
+                    ■ Node_39
+                      ├─ Parent:   Node_38
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.64
+                      ├─ Lockout:  q = 3
+                      ├─ Probs:    [k=0: 0.86, k=1: 0.32, k=2: 0.15]
+                      └─ Gittins:  [k=0: 0.0473, k=1: 0.0179, k=2: 0.0086, k=3: 0.0000]
+
+                    ■ Node_40
+                      ├─ Parent:   Node_38
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.41
+                      ├─ Lockout:  q = 5
+                      ├─ Probs:    [k=0: 0.64, k=1: 0.26, k=2: 0.25, k=3: 0.20, k=4: 0.10]
+                      └─ Gittins:  [k=0: 0.2352, k=1: 0.1108, k=2: 0.1063, k=3: 0.0884, k=4: 0.0472, k=5: 0.0000]
+
+                    ■ Node_41
+                      ├─ Parent:   Node_38
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 3.02
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.82, k=1: 0.23, k=2: 0.13, k=3: 0.12]
+                      └─ Gittins:  [k=0: 0.0745, k=1: 0.0218, k=2: 0.0129, k=3: 0.0119, k=4: 0.0000]
+
+            ■ Node_42
+              ├─ Parent:   Node_25
+              ├─ Children: Node_43, Node_47
+              ├─ Cost (l): 2.81
+              ├─ Lockout:  q = 5
+              ├─ Probs:    [k=0: 0.71, k=1: 0.57, k=2: 0.41, k=3: 0.28, k=4: 0.12]
+              └─ Gittins:  [k=0: 0.0058, k=1: 0.0047, k=2: 0.0035, k=3: 0.0024, k=4: 0.0011, k=5: 0.0000]
+
+                ■ Node_43
+                  ├─ Parent:   Node_42
+                  ├─ Children: Node_44, Node_45, Node_46
+                  ├─ Cost (l): 1.44
+                  ├─ Lockout:  q = 3
+                  ├─ Probs:    [k=0: 0.82, k=1: 0.15, k=2: 0.15]
+                  └─ Gittins:  [k=0: 0.0755, k=1: 0.0177, k=2: 0.0176, k=3: 0.0000]
+
+                    ■ Node_44
+                      ├─ Parent:   Node_43
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.38
+                      ├─ Lockout:  q = 5
+                      ├─ Probs:    [k=0: 0.77, k=1: 0.70, k=2: 0.47, k=3: 0.46, k=4: 0.43]
+                      └─ Gittins:  [k=0: 0.2766, k=1: 0.2571, k=2: 0.1883, k=3: 0.1855, k=4: 0.1746, k=5: 0.0000]
+
+                    ■ Node_45
+                      ├─ Parent:   Node_43
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.93
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.67, k=1: 0.64, k=2: 0.38, k=3: 0.11]
+                      └─ Gittins:  [k=0: 0.1552, k=1: 0.1490, k=2: 0.0938, k=3: 0.0298, k=4: 0.0000]
+
+                    ■ Node_46
+                      ├─ Parent:   Node_43
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.45
+                      ├─ Lockout:  q = 3
+                      ├─ Probs:    [k=0: 0.58, k=1: 0.53, k=2: 0.45]
+                      └─ Gittins:  [k=0: 0.0869, k=1: 0.0806, k=2: 0.0689, k=3: 0.0000]
+
+                ■ Node_47
+                  ├─ Parent:   Node_42
+                  ├─ Children: Node_48
+                  ├─ Cost (l): 1.56
+                  ├─ Lockout:  q = 4
+                  ├─ Probs:    [k=0: 0.81, k=1: 0.45, k=2: 0.43, k=3: 0.40]
+                  └─ Gittins:  [k=0: 0.0665, k=1: 0.0419, k=2: 0.0404, k=3: 0.0379, k=4: 0.0000]
+
+                    ■ Node_48
+                      ├─ Parent:   Node_47
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.37
+                      ├─ Lockout:  q = 3
+                      ├─ Probs:    [k=0: 0.79, k=1: 0.23, k=2: 0.16]
+                      └─ Gittins:  [k=0: 0.2848, k=1: 0.1037, k=2: 0.0732, k=3: 0.0000]
+
+    ■ Node_49
+      ├─ Parent:   Node_0
+      ├─ Children: Node_50
+      ├─ Cost (l): 2.84
+      ├─ Lockout:  q = 5
+      ├─ Probs:    [k=0: 0.90, k=1: 0.81, k=2: 0.53, k=3: 0.46, k=4: 0.14]
+      └─ Gittins:  [k=0: 0.0000, k=1: 0.0000, k=2: 0.0000, k=3: 0.0000, k=4: 0.0000, k=5: 0.0000]
+
+        ■ Node_50
+          ├─ Parent:   Node_49
+          ├─ Children: Node_51
+          ├─ Cost (l): 3.64
+          ├─ Lockout:  q = 4
+          ├─ Probs:    [k=0: 0.48, k=1: 0.44, k=2: 0.40, k=3: 0.26]
+          └─ Gittins:  [k=0: 0.0002, k=1: 0.0002, k=2: 0.0002, k=3: 0.0001, k=4: 0.0000]
+
+            ■ Node_51
+              ├─ Parent:   Node_50
+              ├─ Children: Node_52, Node_54, Node_56
+              ├─ Cost (l): 1.13
+              ├─ Lockout:  q = 4
+              ├─ Probs:    [k=0: 0.79, k=1: 0.74, k=2: 0.63, k=3: 0.33]
+              └─ Gittins:  [k=0: 0.0077, k=1: 0.0074, k=2: 0.0067, k=3: 0.0041, k=4: 0.0000]
+
+                ■ Node_52
+                  ├─ Parent:   Node_51
+                  ├─ Children: Node_53
+                  ├─ Cost (l): 1.31
+                  ├─ Lockout:  q = 3
+                  ├─ Probs:    [k=0: 0.74, k=1: 0.54, k=2: 0.21]
+                  └─ Gittins:  [k=0: 0.0226, k=1: 0.0180, k=2: 0.0081, k=3: 0.0000]
+
+                    ■ Node_53
+                      ├─ Parent:   Node_52
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.45
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.53, k=1: 0.50, k=2: 0.34, k=3: 0.22]
+                      └─ Gittins:  [k=0: 0.0798, k=1: 0.0753, k=2: 0.0527, k=3: 0.0354, k=4: 0.0000]
+
+                ■ Node_54
+                  ├─ Parent:   Node_51
+                  ├─ Children: Node_55
+                  ├─ Cost (l): 2.51
+                  ├─ Lockout:  q = 4
+                  ├─ Probs:    [k=0: 0.73, k=1: 0.72, k=2: 0.58, k=3: 0.55]
+                  └─ Gittins:  [k=0: 0.0146, k=1: 0.0143, k=2: 0.0117, k=3: 0.0113, k=4: 0.0000]
+
+                    ■ Node_55
+                      ├─ Parent:   Node_54
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.14
+                      ├─ Lockout:  q = 5
+                      ├─ Probs:    [k=0: 0.77, k=1: 0.61, k=2: 0.56, k=3: 0.53, k=4: 0.13]
+                      └─ Gittins:  [k=0: 0.1440, k=1: 0.1176, k=2: 0.1097, k=3: 0.1042, k=4: 0.0288, k=5: 0.0000]
+
+                ■ Node_56
+                  ├─ Parent:   Node_51
+                  ├─ Children: Node_57, Node_58
+                  ├─ Cost (l): 2.99
+                  ├─ Lockout:  q = 4
+                  ├─ Probs:    [k=0: 0.89, k=1: 0.87, k=2: 0.86, k=3: 0.76]
+                  └─ Gittins:  [k=0: 0.0166, k=1: 0.0162, k=2: 0.0161, k=3: 0.0143, k=4: 0.0000]
+
+                    ■ Node_57
+                      ├─ Parent:   Node_56
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 2.55
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.64, k=1: 0.41, k=2: 0.37, k=3: 0.12]
+                      └─ Gittins:  [k=0: 0.0874, k=1: 0.0578, k=2: 0.0532, k=3: 0.0178, k=4: 0.0000]
+
+                    ■ Node_58
+                      ├─ Parent:   Node_56
+                      ├─ Children: None (Leaf)
+                      ├─ Cost (l): 1.80
+                      ├─ Lockout:  q = 4
+                      ├─ Probs:    [k=0: 0.83, k=1: 0.67, k=2: 0.21, k=3: 0.12]
+                      └─ Gittins:  [k=0: 0.2036, k=1: 0.1715, k=2: 0.0597, k=3: 0.0359, k=4: 0.0000]
+
