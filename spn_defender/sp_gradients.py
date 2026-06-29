@@ -1,0 +1,553 @@
+"""
+sp_gradient.py  --  value and exact gradients for an arbitrary series-parallel
+layered-defence network.
+
+Given a series-parallel (SP) parse tree over controls, a per-control delay
+allocation, and a discount rate, this computes
+
+    * the Stackelberg game value         V* = root_profile(0)        (forward fold)
+    * the gradient  d V* / d allocation[v]  for every control v       (one backward pass)
+
+both in O(Q^2) time, where Q is the total lockout budget (sum of per-control
+lockouts).
+
+The gradient is the exact (sub)gradient of the convex value function: it equals
+the unique gradient wherever the value is differentiable, and a valid subgradient
+at the measure-zero "index tie" kinks. It is evaluated at the attacker's optimal
+response held fixed (Danskin / envelope theorem), so no differentiation through
+the best-response map is required.
+
+Self-contained: standard library only.
+
+----------------------------------------------------------------------------
+BUILDING A TREE
+----------------------------------------------------------------------------
+    Control(name, lockout, success_probs)
+        A single control.
+          name           : hashable identifier (unique within the tree)
+          lockout        : max attempts before the control jams (>= 1)
+          success_probs  : list of length `lockout`; success_probs[k] is the
+                           breach probability after k previous failures.
+                           A single float is accepted as shorthand for lockout 1.
+    Series(child, child, ...)     Clear every child in order (n-ary, >= 2 children).
+    Parallel(child, child, ...)   Clear ANY one child -- a race (n-ary, >= 2).
+
+Example:
+    tree = Parallel(
+        Series(Control('a', 2, [0.5, 0.4]),
+               Parallel(Control('b', 1, 0.6), Control('c', 1, 0.55))),
+        Series(Control('d', 1, 0.5), Control('e', 1, 0.45)),
+    )
+
+----------------------------------------------------------------------------
+USAGE
+----------------------------------------------------------------------------
+    from sp_gradient import Control, Series, Parallel, value_and_gradient
+
+    value, gradient = value_and_gradient(
+        tree, allocation={'a': 0.2, ...}, discount_rate=1.0)
+    # gradient['a'] == d V* / d allocation['a'], and so on.
+
+    # With an independent check (brute-force MDP + finite differences):
+    value, gradient = value_and_gradient(tree, allocation, discount_rate=1.0,
+                                         verify=True)
+
+Run `python3 sp_gradient.py` for a worked demo.
+"""
+
+import math
+import bisect
+from collections import namedtuple
+from functools import lru_cache
+
+# Numerical tolerances (named instead of scattered magic constants).
+_BREAKPOINT_MERGE_TOL = 1e-14   # treat two breakpoints this close as identical
+_ZERO_DIVISION_GUARD = 1e-15    # below this a profile value is treated as ~0
+_THRESHOLD_TOL = 1e-12          # slack when testing "outside option < threshold"
+_RIGHT_LIMIT_EPS = 1e-13        # offset used to sample a step function's right limit
+
+
+# =========================================================================
+# Piecewise-linear convex profiles on [0, 1].
+#
+# A profile is stored as sorted breakpoints with their function values, with
+# breakpoints[0] == 0 and breakpoints[-1] == 1. The function is linear between
+# consecutive breakpoints and convex overall.
+# =========================================================================
+class PiecewiseLinearProfile:
+    def __init__(self, breakpoints, values):
+        merged_breakpoints, merged_values = [], []
+        for x, y in zip(breakpoints, values):
+            if merged_breakpoints and abs(x - merged_breakpoints[-1]) < _BREAKPOINT_MERGE_TOL:
+                merged_values[-1] = y          # collapse duplicate breakpoint
+            else:
+                merged_breakpoints.append(x)
+                merged_values.append(y)
+        self.breakpoints = merged_breakpoints
+        self.values = merged_values
+
+    def __call__(self, x):
+        breakpoints, values = self.breakpoints, self.values
+        if x <= breakpoints[0]:
+            if len(breakpoints) > 1:
+                slope = (values[1] - values[0]) / (breakpoints[1] - breakpoints[0])
+                return values[0] + slope * (x - breakpoints[0])
+            return values[0]
+        if x >= breakpoints[-1]:
+            if len(breakpoints) > 1:
+                slope = (values[-1] - values[-2]) / (breakpoints[-1] - breakpoints[-2])
+                return values[-1] + slope * (x - breakpoints[-1])
+            return values[-1]
+        i = bisect.bisect_right(breakpoints, x) - 1
+        i = max(0, min(i, len(breakpoints) - 2))
+        slope = (values[i + 1] - values[i]) / (breakpoints[i + 1] - breakpoints[i])
+        return values[i] + slope * (x - breakpoints[i])
+
+    def right_slope(self, x):
+        """Slope of the piece immediately to the right of x (the right derivative)."""
+        breakpoints, values = self.breakpoints, self.values
+        if x >= breakpoints[-1]:
+            i = len(breakpoints) - 2
+        else:
+            i = bisect.bisect_right(breakpoints, x) - 1
+            i = max(0, min(i, len(breakpoints) - 2))
+        return (values[i + 1] - values[i]) / (breakpoints[i + 1] - breakpoints[i])
+
+
+IDENTITY_PROFILE = PiecewiseLinearProfile([0, 1], [0, 1])   # x -> x
+
+
+def affine_transform(profile, intercept, slope):
+    """Return the profile  x -> intercept + slope * profile(x)  (same breakpoints)."""
+    return PiecewiseLinearProfile(
+        list(profile.breakpoints),
+        [intercept + slope * y for y in profile.values],
+    )
+
+
+def pointwise_max(profile_a, profile_b):
+    """Exact pointwise maximum of two convex piecewise-linear profiles."""
+    candidate_breakpoints = sorted(set(profile_a.breakpoints) | set(profile_b.breakpoints))
+    crossings = []
+    for i in range(len(candidate_breakpoints) - 1):
+        left, right = candidate_breakpoints[i], candidate_breakpoints[i + 1]
+        gap_left = profile_a(left) - profile_b(left)
+        gap_right = profile_a(right) - profile_b(right)
+        if gap_left == 0 or gap_right == 0:
+            continue
+        if (gap_left < 0) != (gap_right < 0):                 # the two profiles cross here
+            fraction = gap_left / (gap_left - gap_right)
+            crossings.append(left + fraction * (right - left))
+    all_breakpoints = sorted(set(candidate_breakpoints) | set(crossings))
+    return PiecewiseLinearProfile(
+        all_breakpoints,
+        [max(profile_a(x), profile_b(x)) for x in all_breakpoints],
+    )
+
+
+# =========================================================================
+# Tree node types. Series/Parallel hold a tuple of children; after
+# normalisation that tuple always has exactly two entries (left, right).
+# =========================================================================
+ControlNode = namedtuple("ControlNode", ["name", "lockout", "success_probs"])
+SeriesNode = namedtuple("SeriesNode", ["children"])
+ParallelNode = namedtuple("ParallelNode", ["children"])
+
+
+def Control(name, lockout, success_probs):
+    probs = ([float(success_probs)] if isinstance(success_probs, (int, float))
+             else [float(p) for p in success_probs])
+    if lockout < 1:
+        raise ValueError(f"control {name!r}: lockout must be >= 1")
+    if len(probs) != lockout:
+        raise ValueError(
+            f"control {name!r}: len(success_probs)={len(probs)} must equal lockout={lockout}")
+    return ControlNode(name, lockout, probs)
+
+
+def Series(*children):
+    if len(children) < 2:
+        raise ValueError("Series needs >= 2 children")
+    return SeriesNode(tuple(children))
+
+
+def Parallel(*children):
+    if len(children) < 2:
+        raise ValueError("Parallel needs >= 2 children")
+    return ParallelNode(tuple(children))
+
+
+def to_binary_tree(node):
+    """Right-fold n-ary Series/Parallel nodes into binary ones (series and
+    parallel are associative, so this preserves the game)."""
+    if isinstance(node, ControlNode):
+        return node
+    node_type = type(node)
+    binary_children = [to_binary_tree(child) for child in node.children]
+    folded = binary_children[-1]
+    for child in reversed(binary_children[:-1]):
+        folded = node_type((child, folded))
+    return folded
+
+
+def collect_controls(node):
+    if isinstance(node, ControlNode):
+        return [node]
+    left, right = node.children
+    return collect_controls(left) + collect_controls(right)
+
+
+# =========================================================================
+# Forward fold (Pass 1): build a profile for every block, bottom-up.
+# =========================================================================
+def control_profile(discount_factor, success_probs, lockout):
+    """Profile of a single control, plus its per-failure-count ladder of profiles
+    and the switch thresholds (outside-option value at which attacking stops being
+    worthwhile at each count)."""
+    profiles_by_count = {lockout: IDENTITY_PROFILE}      # a jammed control is worth `s`
+    thresholds_by_count = {}
+    for failures in range(lockout - 1, -1, -1):
+        p = success_probs[failures]
+        beta = discount_factor
+        attack_value = affine_transform(profiles_by_count[failures + 1],
+                                        beta * p, beta * (1 - p))   # beta*(p + (1-p)*next)
+        profile = pointwise_max(IDENTITY_PROFILE, attack_value)     # max{stop, attack}
+        profiles_by_count[failures] = profile
+
+        # Threshold: smallest outside option at which "attack" no longer wins.
+        threshold = 1.0
+        breakpoints = profile.breakpoints
+        for i in range(len(breakpoints) - 1):
+            left, right = breakpoints[i], breakpoints[i + 1]
+            surplus_left = attack_value(left) - left
+            surplus_right = attack_value(right) - right
+            if surplus_left > _ZERO_DIVISION_GUARD and surplus_right <= _ZERO_DIVISION_GUARD:
+                fraction = surplus_left / (surplus_left - surplus_right)
+                threshold = left + fraction * (right - left)
+                break
+            if surplus_left <= _ZERO_DIVISION_GUARD:
+                threshold = left
+                break
+        thresholds_by_count[failures] = threshold
+    return profiles_by_count[0], profiles_by_count, thresholds_by_count
+
+
+def parallel_profile(left_profile, right_profile):
+    """Race of two branches:  profile(s) = 1 - integral_s^1 (g_left * g_right),
+    so the profile's slope is the product of the two branch slopes."""
+    breakpoints = sorted(set(left_profile.breakpoints) | set(right_profile.breakpoints))
+    values = [None] * len(breakpoints)
+    values[-1] = 1.0
+    for i in range(len(breakpoints) - 2, -1, -1):
+        left, right = breakpoints[i], breakpoints[i + 1]
+        midpoint = 0.5 * (left + right)
+        slope_product = left_profile.right_slope(midpoint) * right_profile.right_slope(midpoint)
+        values[i] = values[i + 1] - slope_product * (right - left)
+    return PiecewiseLinearProfile(breakpoints, values)
+
+
+def series_profile(upstream_profile, downstream_profile):
+    """Chain of two blocks:  profile(s) = downstream(s) * upstream(s / downstream(s))."""
+    breakpoints = {0.0, 1.0} | set(downstream_profile.breakpoints)
+    # Add breakpoints where the relocated argument s/downstream(s) crosses an
+    # upstream breakpoint; on each linear piece of the downstream profile this is
+    # a simple closed-form solve.
+    for piece in range(len(downstream_profile.breakpoints) - 1):
+        x0 = downstream_profile.breakpoints[piece]
+        x1 = downstream_profile.breakpoints[piece + 1]
+        value0 = downstream_profile.values[piece]
+        slope = (downstream_profile.values[piece + 1] - value0) / (x1 - x0)
+        intercept = value0 - slope * x0                       # downstream(s) = intercept + slope*s
+        for upstream_breakpoint in upstream_profile.breakpoints:
+            denominator = 1 - upstream_breakpoint * slope
+            if abs(denominator) < _ZERO_DIVISION_GUARD:
+                continue
+            s = upstream_breakpoint * intercept / denominator
+            if x0 - _THRESHOLD_TOL <= s <= x1 + _THRESHOLD_TOL and 0 <= s <= 1:
+                breakpoints.add(min(1, max(0, s)))
+    ordered_breakpoints = sorted(breakpoints)
+    values = []
+    for s in ordered_breakpoints:
+        downstream_value = downstream_profile(s)
+        if downstream_value <= _ZERO_DIVISION_GUARD:
+            values.append(0.0)
+        else:
+            values.append(downstream_value * upstream_profile(s / downstream_value))
+    return PiecewiseLinearProfile(ordered_breakpoints, values)
+
+
+# Cached per-node forward data, consumed by the backward pass.
+_ControlData = namedtuple("_ControlData", ["profile", "profiles_by_count", "thresholds_by_count"])
+_InternalData = namedtuple("_InternalData", ["profile", "left_profile", "right_profile"])
+
+
+def compute_profiles(node, discount_factors, forward_cache):
+    """Forward fold; records each node's profile (and a control's count ladder)
+    into forward_cache keyed by node identity. Returns the node's profile."""
+    if isinstance(node, ControlNode):
+        profile, profiles_by_count, thresholds = control_profile(
+            discount_factors[node.name], node.success_probs, node.lockout)
+        forward_cache[id(node)] = _ControlData(profile, profiles_by_count, thresholds)
+        return profile
+    left, right = node.children
+    left_profile = compute_profiles(left, discount_factors, forward_cache)
+    right_profile = compute_profiles(right, discount_factors, forward_cache)
+    if isinstance(node, SeriesNode):
+        profile = series_profile(left_profile, right_profile)
+    else:
+        profile = parallel_profile(left_profile, right_profile)
+    forward_cache[id(node)] = _InternalData(profile, left_profile, right_profile)
+    return profile
+
+
+# =========================================================================
+# Backward pass (Pass 2): reverse-mode differentiation through the fold.
+#
+# Each node carries a "weight list": a list of (point, weight) pairs encoding the
+# linear functional  perturbation -> sum_j weight_j * perturbation(point_j),
+# i.e. how V* responds to perturbing this node's profile.
+# =========================================================================
+def cumulative_weight(weight_list):
+    """Return the step function  z -> sum of weights at points <= z."""
+    ordered = sorted(weight_list)
+    def value_at(z):
+        return sum(weight for point, weight in ordered if point <= z + _ZERO_DIVISION_GUARD)
+    return value_at
+
+
+def step_function_to_weight_list(step_function, breakpoints):
+    """Represent a step function as a weight list: the value just right of 0,
+    then the jump at each interior breakpoint."""
+    weight_list = [(0.0, step_function(_RIGHT_LIMIT_EPS))]
+    previous = weight_list[0][1]
+    for breakpoint in sorted(breakpoints):
+        if breakpoint <= _THRESHOLD_TOL or breakpoint >= 1 - _THRESHOLD_TOL:
+            continue
+        right_value = step_function(breakpoint + _RIGHT_LIMIT_EPS)
+        jump = right_value - previous
+        if abs(jump) > _BREAKPOINT_MERGE_TOL:
+            weight_list.append((breakpoint, jump))
+        previous = right_value
+    return weight_list
+
+
+def leaf_beta_sensitivity(outside_option, control_node, discount_factor, control_data):
+    """d profile / d beta for a control, evaluated at one outside-option value,
+    via the downward failure-count recursion."""
+    profiles_by_count = control_data.profiles_by_count
+    thresholds = control_data.thresholds_by_count
+    success_probs = control_node.success_probs
+    sensitivity = 0.0                                   # value at the jammed count
+    for failures in range(control_node.lockout - 1, -1, -1):
+        if outside_option < thresholds[failures] - _THRESHOLD_TOL:   # attack branch active
+            p = success_probs[failures]
+            next_profile = profiles_by_count[failures + 1]
+            sensitivity = ((p + (1 - p) * next_profile(outside_option))
+                           + discount_factor * (1 - p) * sensitivity)
+        else:                                                        # stop branch active
+            sensitivity = 0.0
+    return sensitivity
+
+
+def compute_gradient(tree, discount_factors, discount_rate, forward_cache):
+    """Backward pass returning {control_name: d V* / d allocation[name]}."""
+    gradient = {}
+
+    def propagate(node, weight_list):
+        node_data = forward_cache[id(node)]
+        if isinstance(node, ControlNode):
+            discount_factor = discount_factors[node.name]
+            beta_sensitivity = sum(
+                weight * leaf_beta_sensitivity(point, node, discount_factor, node_data)
+                for point, weight in weight_list)
+            # Chain rule from beta to the allocation: d beta / d allocation = -rho * beta.
+            gradient[node.name] = -discount_rate * discount_factor * beta_sensitivity
+            return
+
+        left, right = node.children
+        left_profile = node_data.left_profile
+        right_profile = node_data.right_profile
+
+        if isinstance(node, ParallelNode):
+            cumulative = cumulative_weight(weight_list)
+            query_points = {point for point, _ in weight_list}
+            # Each branch is modulated by the OTHER branch's slope.
+            left_weights = step_function_to_weight_list(
+                lambda z: right_profile.right_slope(z) * cumulative(z),
+                set(right_profile.breakpoints) | query_points)
+            right_weights = step_function_to_weight_list(
+                lambda z: left_profile.right_slope(z) * cumulative(z),
+                set(left_profile.breakpoints) | query_points)
+            propagate(left, left_weights)
+            propagate(right, right_weights)
+        else:  # SeriesNode: left is upstream, right is downstream
+            def relocate(point):
+                downstream_value = right_profile(point)
+                return point / downstream_value if downstream_value > _ZERO_DIVISION_GUARD else 0.0
+
+            upstream_weights = [
+                (relocate(point), weight * right_profile(point))
+                for point, weight in weight_list]
+            downstream_weights = [
+                (point, weight * (left_profile(relocate(point))
+                                  - relocate(point) * left_profile.right_slope(relocate(point))))
+                for point, weight in weight_list]
+            propagate(left, upstream_weights)
+            propagate(right, downstream_weights)
+
+    propagate(tree, [(0.0, 1.0)])     # seed: V* = root_profile(0)
+    return gradient
+
+
+# =========================================================================
+# Independent reference: brute-force MDP value (exponential state space;
+# usable as a check on small trees only).
+# =========================================================================
+def brute_force_value(tree, discount_factors):
+    controls = collect_controls(tree)
+    success_probs = {c.name: c.success_probs for c in controls}
+    lockouts = {c.name: c.lockout for c in controls}
+
+    def is_cleared(node, state):
+        if isinstance(node, ControlNode):
+            return state[node.name] == "passed"
+        left, right = node.children
+        if isinstance(node, SeriesNode):
+            return is_cleared(left, state) and is_cleared(right, state)
+        return is_cleared(left, state) or is_cleared(right, state)
+
+    def attackable_controls(node, state):
+        if isinstance(node, ControlNode):
+            return [node.name] if isinstance(state[node.name], int) else []
+        left, right = node.children
+        if isinstance(node, SeriesNode):
+            return (attackable_controls(left, state) if not is_cleared(left, state)
+                    else attackable_controls(right, state))
+        if is_cleared(left, state) or is_cleared(right, state):
+            return []
+        return attackable_controls(left, state) + attackable_controls(right, state)
+
+    @lru_cache(maxsize=None)
+    def value(state_items):
+        state = dict(state_items)
+        if is_cleared(tree, state):
+            return 1.0
+        frontier = attackable_controls(tree, state)
+        if not frontier:
+            return 0.0
+        best = 0.0
+        for name in frontier:
+            failures = state[name]
+            p = success_probs[name][failures]
+            discount_factor = discount_factors[name]
+            after_success = dict(state); after_success[name] = "passed"
+            after_failure = dict(state)
+            after_failure[name] = ("jammed" if failures + 1 == lockouts[name] else failures + 1)
+            best = max(best, discount_factor * (
+                p * value(tuple(sorted(after_success.items())))
+                + (1 - p) * value(tuple(sorted(after_failure.items())))))
+        return best
+
+    initial_state = tuple(sorted({c.name: 0 for c in controls}.items()))
+    return value(initial_state)
+
+
+# =========================================================================
+# Public API
+# =========================================================================
+def value_and_gradient(tree, allocation=None, discount_rate=1.0,
+                       verify=False, finite_diff_step=1e-6):
+    """
+    Compute the game value V* and the gradient {control_name: d V* / d allocation}
+    for an arbitrary series-parallel tree.
+
+    tree           : built from Control / Series / Parallel (n-ary allowed)
+    allocation     : dict {control_name: delay}. If None, uniform on the simplex.
+    discount_rate  : discount rate rho (> 0)
+    verify         : also solve the brute-force MDP and finite-difference the
+                     gradient, printing the agreement. Exponential; small trees only.
+
+    Returns (value, gradient).
+    """
+    binary_tree = to_binary_tree(tree)
+    controls = collect_controls(binary_tree)
+    names = [c.name for c in controls]
+    if len(set(names)) != len(names):
+        raise ValueError(f"duplicate control names: {names}")
+    if allocation is None:
+        allocation = {name: 1.0 / len(names) for name in names}
+    missing = set(names) - set(allocation)
+    if missing:
+        raise ValueError(f"allocation missing controls: {sorted(missing)}")
+    if discount_rate <= 0:
+        raise ValueError("discount_rate must be > 0")
+
+    discount_factors = {name: math.exp(-discount_rate * allocation[name]) for name in names}
+    forward_cache = {}
+    root_profile = compute_profiles(binary_tree, discount_factors, forward_cache)
+    value = root_profile(0.0)
+    gradient = compute_gradient(binary_tree, discount_factors, discount_rate, forward_cache)
+
+    if verify:
+        reference_value = brute_force_value(binary_tree, discount_factors)
+        print(f"[verify] V*: fold={value:.10f}  brute-MDP={reference_value:.10f}  "
+              f"|diff|={abs(value - reference_value):.2e}")
+        worst_discrepancy = 0.0
+        for name in names:
+            bumped_up = dict(allocation); bumped_up[name] += finite_diff_step
+            bumped_down = dict(allocation); bumped_down[name] -= finite_diff_step
+            factors_up = {n: math.exp(-discount_rate * bumped_up[n]) for n in names}
+            factors_down = {n: math.exp(-discount_rate * bumped_down[n]) for n in names}
+            finite_diff = (brute_force_value(binary_tree, factors_up)
+                           - brute_force_value(binary_tree, factors_down)) / (2 * finite_diff_step)
+            discrepancy = abs(gradient[name] - finite_diff)
+            worst_discrepancy = max(worst_discrepancy, discrepancy)
+            print(f"[verify]   dV*/d allocation[{name}]: "
+                  f"reverse={gradient[name]:+.8f}  finite-diff={finite_diff:+.8f}  "
+                  f"|diff|={discrepancy:.2e}")
+        note = ("   (large only at exact index ties / kinks)"
+                if worst_discrepancy > 1e-5 else "")
+        print(f"[verify] worst gradient discrepancy = {worst_discrepancy:.2e}{note}")
+
+    return value, gradient
+
+
+def print_report(tree, allocation=None, discount_rate=1.0, verify=False):
+    """Compute and pretty-print the value and per-control gradient table."""
+    value, gradient = value_and_gradient(tree, allocation, discount_rate, verify=verify)
+    names = [c.name for c in collect_controls(to_binary_tree(tree))]
+    if allocation is None:
+        allocation = {name: 1.0 / len(names) for name in names}
+    print(f"\nV* = {value:.6f}    (discount_rate = {discount_rate})")
+    header = f"{'control':<10}{'allocation':>12}{'dV*/d alloc':>15}{'deterrence':>14}"
+    print(header)
+    print("-" * len(header))
+    for name in names:
+        print(f"{name:<10}{allocation[name]:>12.4f}{gradient[name]:>15.6f}{-gradient[name]:>14.6f}")
+    return value, gradient
+
+
+# =========================================================================
+# Demo
+# =========================================================================
+if __name__ == "__main__":
+    print("=" * 66)
+    print("DEMO 1  --  Parallel(Series(a, Parallel(b, c)), Series(d, e)),  q_a = 2")
+    print("=" * 66)
+    tree = Parallel(
+        Series(Control("a", 2, [0.5, 0.4]),
+               Parallel(Control("b", 1, 0.6), Control("c", 1, 0.55))),
+        Series(Control("d", 1, 0.5), Control("e", 1, 0.45)),
+    )
+    allocation = {"a": 0.20, "b": 0.10, "c": 0.15, "d": 0.30, "e": 0.25}
+    print_report(tree, allocation, discount_rate=1.0, verify=True)
+
+    print("\n" + "=" * 66)
+    print("DEMO 2  --  n-ary parallel race of three chains (uniform allocation)")
+    print("=" * 66)
+    three_way = Parallel(
+        Series(Control("x1", 1, 0.6), Control("x2", 1, 0.5)),
+        Series(Control("y1", 2, [0.5, 0.3]), Control("y2", 1, 0.55)),
+        Control("z", 1, 0.45),
+    )
+    print_report(three_way, allocation=None, discount_rate=1.0, verify=True)
