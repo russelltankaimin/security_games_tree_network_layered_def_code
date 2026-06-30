@@ -2,3 +2,6 @@
 .DS_Store/
 outtree/__pycache__.DS_Store
 **/.DS_Store
+__pycache__/
+**/__pycache__/
+*.py[cod]
