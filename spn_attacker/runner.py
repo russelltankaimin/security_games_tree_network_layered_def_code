@@ -63,6 +63,7 @@ FIELDNAMES = [
     "win_probability",
     "mean_attempts",
     "mean_attempts_given_win",
+    "mean_time",
     "optimal_value",
     "absolute_gap",
     "relative_loss",
@@ -173,15 +174,22 @@ def run_sweep(args: argparse.Namespace) -> List[Dict]:
         policies: Dict[str, object] = {"index_policy": IndexAttacker(net)}
         policies.update(baseline_policies(net, rng=random.Random(policy_seed)))
 
+        net_rows: List[Dict] = []
         for label, policy in policies.items():
             row = evaluate_policy(net, label, policy, args.samples, eval_seed, optimal_value)
             row.update(descriptors)
             rows.append(row)
+            net_rows.append(row)
+
+        # Mean total attack time l (summed time payments per attack), averaged
+        # over all attacker policies evaluated on this network.
+        mean_time = sum(r["mean_time"] for r in net_rows) / len(net_rows)
 
         print(
             f"[{network_id + 1:>3}/{args.num_networks}] "
             f"n={descriptors['n_controls']} Q={descriptors['total_Q']} "
-            f"depth={descriptors['depth']} V*={optimal_value:.4f}  {descriptors['structure']}"
+            f"depth={descriptors['depth']} V*={optimal_value:.4f} "
+            f"mean_time={mean_time:.3f}  {descriptors['structure']}"
         )
 
     _write_csv(rows, args.out)
@@ -218,12 +226,13 @@ def _print_aggregate(rows: List[Dict], out_path: str) -> None:
         by_policy.setdefault(row["policy"], []).append(row)
 
     print(f"\nmean over {len({r['network_id'] for r in rows})} networks:")
-    print(f"{'policy':18s} {'mean rel.loss':>14s} {'mean win p':>11s}")
+    print(f"{'policy':18s} {'mean rel.loss':>14s} {'mean win p':>11s} {'mean time':>11s}")
     ordered = sorted(by_policy.items(), key=lambda kv: sum(r["relative_loss"] for r in kv[1]))
     for label, policy_rows in ordered:
         mean_loss = sum(r["relative_loss"] for r in policy_rows) / len(policy_rows)
         mean_win = sum(r["win_probability"] for r in policy_rows) / len(policy_rows)
-        print(f"{label:18s} {100 * mean_loss:13.3f}% {mean_win:11.3f}")
+        mean_time = sum(r["mean_time"] for r in policy_rows) / len(policy_rows)
+        print(f"{label:18s} {100 * mean_loss:13.3f}% {mean_win:11.3f} {mean_time:11.3f}")
     print(f"\nwrote {len(rows)} rows to {out_path}")
 
 

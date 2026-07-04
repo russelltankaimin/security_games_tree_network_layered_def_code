@@ -53,6 +53,11 @@ from sp_attacker import (
 )
 from other_policies import baseline_policies, simulate
 
+# Discount-rate constant rho relating a control's stored discount to its time
+# payment: beta_v = exp(-rho * l_v), so l_v = -ln(beta_v) / rho. Adjust to
+# rescale the reported attack times into whatever time unit rho is defined in.
+RHO = 1.0
+
 # Column order for the CSV / printed table.
 FIELDNAMES = [
     "policy",
@@ -63,6 +68,7 @@ FIELDNAMES = [
     "win_probability",
     "mean_attempts",
     "mean_attempts_given_win",
+    "mean_time",
     "optimal_value",
     "absolute_gap",
     "relative_loss",
@@ -162,15 +168,22 @@ def evaluate_policy(
 ) -> Dict:
     """Run `num_samples` rollouts and return the metric row for this policy."""
     rng = random.Random(seed)
+    # Per-control time payment l_v = -ln(beta_v) / rho. The total time of one
+    # attack is the sum of l_v over every attempt made, so a control attacked
+    # k times contributes k * l_v (we sum over the rollout history, one entry
+    # per attempt).
+    time_of = {c.name: -math.log(c.beta) / RHO for c in controls(net)}
     rewards: List[float] = []
     attempts: List[int] = []
     attempts_given_win: List[int] = []
+    times: List[float] = []
     wins = 0
 
     for _ in range(num_samples):
         result = simulate(net, policy, rng)
         rewards.append(result.reward)
         attempts.append(result.attempts)
+        times.append(sum(time_of[name] for name, _, _ in result.history))
         if result.won:
             wins += 1
             attempts_given_win.append(result.attempts)
@@ -196,6 +209,7 @@ def evaluate_policy(
         "mean_attempts_given_win": (
             sum(attempts_given_win) / len(attempts_given_win) if attempts_given_win else float("nan")
         ),
+        "mean_time": sum(times) / n,
         "optimal_value": optimal_value,
         "absolute_gap": absolute_gap,
         "relative_loss": relative_loss,
@@ -252,10 +266,10 @@ def _print_summary(rows: List[Dict], optimal_value: float, out_path: str) -> Non
     print(f"optimal value V* = {optimal_value:.6f}   ({rows[0]['n_controls']} controls, "
           f"Q={rows[0]['total_Q']}, {rows[0]['num_samples']} samples)\n")
     print(f"{'policy':18s} {'reward':>9s} {'+/-95%':>8s} {'win p':>7s} "
-          f"{'E[att]':>7s} {'rel.loss':>9s}")
+          f"{'E[att]':>7s} {'E[time]':>8s} {'rel.loss':>9s}")
     for r in rows:
         print(f"{r['policy']:18s} {r['expected_reward']:9.4f} {r['ci95_halfwidth']:8.4f} "
-              f"{r['win_probability']:7.3f} {r['mean_attempts']:7.2f} "
+              f"{r['win_probability']:7.3f} {r['mean_attempts']:7.2f} {r['mean_time']:8.3f} "
               f"{100 * r['relative_loss']:8.3f}%")
     print(f"\nwrote {out_path}")
 
