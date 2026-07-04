@@ -226,32 +226,67 @@ class PiecewiseLinear:
             Psi_Series(gamma) = R(gamma) * P(gamma / R(gamma)),
 
         where R = downstream value, P = upstream value. On each cell where R is
-        linear (R = u + v*gamma) and P is linear in its argument, the product is
-        again *linear in gamma* -- so the result is exactly PWL. The breakpoints
-        are those of R together with the gammas at which gamma / R(gamma) hits a
-        breakpoint of P.
+        linear and P is linear in its argument, the product is again linear in
+        gamma, so the result is exactly PWL. Its breakpoints are the knots of R
+        together with the gammas at which the argument u(gamma) = gamma / R(gamma)
+        hits a knot of P.
+
+        Linear-merge implementation. Because R is nondecreasing, 1-Lipschitz, and
+        R(gamma) >= gamma, the argument u(gamma) = gamma / R(gamma) is monotone
+        nondecreasing. Hence u evaluated at R's knots is already sorted, and each
+        upstream knot's pre-image can be found by advancing a single pointer over
+        R's pieces (a merge), rather than testing every (R-piece, P-knot) pair.
+        This costs O(|R| + |P|) instead of O(|R| * |P|).
         """
         R, P = downstream, upstream
-        knots = set(R.xs)
-        for i in range(len(R.xs) - 1):
-            ax, bx = R.xs[i], R.xs[i + 1]
-            ay, by = R.ys[i], R.ys[i + 1]
+        Rx, Ry = R.xs, R.ys
+
+        def argument(gamma: float, r_value: float) -> float:
+            """u(gamma) = gamma / R(gamma), clamped to [0, 1] (0 if R(gamma) ~ 0)."""
+            return 0.0 if r_value <= 1e-15 else min(max(gamma / r_value, 0.0), 1.0)
+
+        # u at each downstream knot -- sorted, since u is monotone.
+        u_at_knot = [argument(Rx[i], Ry[i]) for i in range(len(Rx))]
+
+        # Pre-image gamma of each interior upstream knot, in increasing order,
+        # located by a single forward sweep over R's pieces.
+        preimages: List[float] = []
+        piece = 0
+        for u in P.xs:
+            if u <= 1e-15 or u >= 1.0 - 1e-15:
+                continue  # u = 0 -> gamma = 0; u = 1 -> gamma = alpha_R; both are R knots
+            while piece + 1 < len(u_at_knot) and u_at_knot[piece + 1] < u:
+                piece += 1
+            ax, bx = Rx[piece], Rx[piece + 1]
+            ay, by = Ry[piece], Ry[piece + 1]
             slope = (by - ay) / (bx - ax)
             intercept = ay - slope * ax  # R(gamma) = intercept + slope * gamma here
-            for u in P.xs:
-                denom = 1.0 - u * slope  # solve gamma / R(gamma) = u
-                if abs(denom) < 1e-15:
-                    continue
-                gamma = u * intercept / denom
-                if ax - 1e-12 <= gamma <= bx + 1e-12:
-                    knots.add(min(max(gamma, ax), bx))
-        xs = sorted(g for g in knots if -1e-9 <= g <= 1 + 1e-9)
-        ys = []
-        for gamma in xs:
-            Rg = R(gamma)
-            arg = 0.0 if Rg <= 1e-15 else min(max(gamma / Rg, 0.0), 1.0)
-            ys.append(Rg * P(arg))
-        return PiecewiseLinear(xs, ys)
+            denom = 1.0 - u * slope  # solve gamma / R(gamma) = u for gamma
+            if abs(denom) < 1e-15:
+                continue
+            preimages.append(min(max(u * intercept / denom, ax), bx))
+
+        # Merge the two already-sorted breakpoint sources (R's knots and the
+        # pre-images), dropping duplicates.
+        breakpoints: List[float] = []
+        i = j = 0
+        while i < len(Rx) or j < len(preimages):
+            if j >= len(preimages) or (i < len(Rx) and Rx[i] <= preimages[j]):
+                candidate = Rx[i]
+                i += 1
+            else:
+                candidate = preimages[j]
+                j += 1
+            candidate = min(max(candidate, 0.0), 1.0)
+            if not breakpoints or candidate - breakpoints[-1] > 1e-12:
+                breakpoints.append(candidate)
+
+        # Evaluate the exact product at each breakpoint.
+        values = []
+        for gamma in breakpoints:
+            r_value = R(gamma)
+            values.append(r_value * P(argument(gamma, r_value)))
+        return PiecewiseLinear(breakpoints, values)
 
     def index_crossing(self) -> float:
         """Smallest gamma in [0, 1] with self(gamma) = gamma (the index).
@@ -564,3 +599,4 @@ if __name__ == "__main__":
     estimate = attacker.monte_carlo_value(50_000, random.Random(1))
     print(f"\n  Monte-Carlo value (50k rollouts) = {estimate:.6f}")
     print(f"  exact game value                 = {game_value(network):.6f}")
+    
