@@ -65,7 +65,7 @@ python3 regret_matching.py --rho 0.9 --iterations 2000 --verify \
 Outputs the final time allocation `l_v`, the resulting `beta_v`, the attacker's
 index table `alpha(v, k)` at the solution, and the **min–max value**.
 
-## `regret_matching_arbitrary.py` — feasible set = any polyhedron
+## `projected_subgrad.py` — feasible set = any polyhedron
 
 Generalises the feasible set to an arbitrary nonempty polyhedron
 
@@ -89,16 +89,16 @@ to converge to the true projection onto their intersection).
 
 ```bash
 # simplex (reproduces regret_matching.py)
-python3 regret_matching_arbitrary.py --verify
+python3 projected_subgrad.py --verify
 
 # genuine polyhedron: floor every control at l_v >= 0.05, with sum_v l_v = 1
-python3 regret_matching_arbitrary.py --min-share 0.05 --verify
+python3 projected_subgrad.py --min-share 0.05 --verify
 ```
 
 Programmatic use with the raw `A l + c >= d` form:
 
 ```python
-from regret_matching_arbitrary import Polyhedron, solve, default_network, control_names
+from projected_subgrad import Polyhedron, solve, default_network, control_names
 
 spec  = default_network()
 names = control_names(spec)                 # fixes the column order of A
