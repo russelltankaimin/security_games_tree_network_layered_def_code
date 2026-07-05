@@ -52,18 +52,34 @@ Names may be quoted (parsed with `shlex`, so embedded spaces are preserved).
 
 **Phase 1 — Lexing & ingestion.** Split on `;`, `shlex`-tokenise each line, and
 sort statements into two tables: `gates` (`name -> (gate_type, [children])`) and
-`leaves` (`name -> {attr: value}`).
+`leaves` (`name -> {attr: value}`). A stray space after `=` (e.g. `prob= 8.61e-5`)
+is repaired in place.
 
-**Phase 2 — Structural SP filter (the gatekeeper).** Two rejections guarantee the
-input cannot break the solver's exact fold:
+**Phase 2 — Read-once reduction (the gatekeeper).** The solver needs a
+vertex-disjoint SP *tree*, i.e. a **read-once** function (each basic event used
+once). A shared event makes the input a DAG, but the DAG may still *denote* a
+read-once function, so instead of blanket-rejecting every shared node we decide
+representability semantically:
 
 - **Safelist.** Only `{or, and, seq, pand}` are allowed. Any spare gate (`csp`),
-  functional dependency (`fdep`), maintenance/inspection loop (`inspT`), etc.
-  raises `ValueError` — this keeps restless-bandit / infinite-horizon dynamics
-  out of the solver.
-- **DAG rejection.** The in-degree of every node is computed; if any node has
-  in-degree > 1 (a subtree shared across branches) the tree is a DAG and is
-  rejected, enforcing the vertex-disjoint topology.
+  functional dependency (`fdep`), maintenance/inspection loop (`inspT`), etc. is
+  rejected — this keeps restless-bandit / infinite-horizon dynamics out.
+- **Reduce with sound Boolean identities.** *Flatten* associative same-type gates
+  (`OR(a, OR(b,c)) → OR(a,b,c)`, and `AND`), *dedup* identical children
+  (idempotency `OR(a,a)=a`, `AND(a,a)=a`, and identical shared subtrees), and
+  *collapse* unary gates.
+- **Accept iff read-once.** After reduction, every gate's children must have
+  **disjoint variable sets**. Disjoint ⟹ the function is read-once (SP-
+  representable). A residual overlap is a genuine coupling — a 2-of-3 vote / a
+  Wheatstone bridge — that no SP tree can express, and is rejected. This runs on
+  leaf-*sets* with memoisation, so it is polynomial: a shared DAG is **never**
+  expanded into an exponential tree.
+
+  So an all-`or` tree that merely repeats an event (e.g. `T10 Chopper`, where
+  `X6` sits under three `or`-gates) collapses to one `Parallel` and is accepted,
+  while a true bridge is rejected. *Not handled* (conservatively rejected):
+  distributive factoring of a shared common `AND`-factor across `OR` branches,
+  `OR(AND(c,a), AND(c,b)) = AND(c, OR(a,b))`.
 
 **Phase 3 — Build & synthesise.** Recurse from `toplevel` down:
 
@@ -109,8 +125,9 @@ Both outputs are valid input to `sp_network_main/`:
   Standalone — no solver import required.
 
 - **`to_spec(text)`** — the live `Control` / `Series` / `Parallel` spec object,
-  ready to hand straight to `solve(...)` / `regret_matching(...)`. It lazily
-  imports `parse_tree` from `sp_network_main/regret_matching.py`.
+  ready to hand straight to `solve(...)` / `regret_matching(...)`. It builds the
+  namedtuple objects directly (n-ary gates right-folded into the solver's binary
+  nodes), lazily importing the constructors from `sp_network_main/`.
 
 ## Usage
 
