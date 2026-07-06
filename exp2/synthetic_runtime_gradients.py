@@ -73,6 +73,7 @@ from sp_attacker import (  # noqa: E402
     Par as AttackerPar,
     Series as AttackerSeries,
     index_table,
+    value_profile,
 )
 from sp_gradients2 import (  # noqa: E402
     Control as DefenderControl,
@@ -221,6 +222,14 @@ def run_regret_matching(method, structure, probs, names, defender_tree, rho,
                else {v: 1.0 / n for v in names})
         cum_time += time.perf_counter() - start
 
+        # The stochastic path builds a fresh attacker net each iteration, so
+        # sp_attacker.value_profile's unbounded lru_cache accumulates a profile
+        # per distinct net and never reuses across iterations. Drop it (untimed;
+        # pure memory hygiene -- value_profile is a pure function, so this cannot
+        # change any result).
+        if method == "stochastic":
+            value_profile.cache_clear()
+
         # Average external regret (cheap) drives the convergence test every iter.
         rm_regret = max(0.0, max(cumulative_regret.values())) / t
         converged = epsilon is not None and rm_regret < epsilon
@@ -311,18 +320,31 @@ def summarise(trajectory, v_opt, epsilon):
 
 def run(args):
     networks = load_networks(args.csv)
+    # Restrict to a network_id range: [start_id, end_id] (end defaults to last).
+    networks = [nw for nw in networks if nw["network_id"] >= args.start_id]
+    if args.end_id is not None:
+        networks = [nw for nw in networks if nw["network_id"] <= args.end_id]
     if args.limit:
         networks = networks[: args.limit]
+    if not networks:
+        raise SystemExit(f"no networks in id range [{args.start_id}, {args.end_id}]")
     methods = (["exact", "stochastic"] if args.methods == "both" else [args.methods])
 
     iter_path = args.out + "_iterations.csv"
     summary_path = args.out + "_summary.csv"
-    iter_file = open(iter_path, "w", newline="")
-    iter_writer = csv.DictWriter(iter_file, fieldnames=ITER_FIELDS)
-    iter_writer.writeheader()
-    summary_file = open(summary_path, "w", newline="")
-    summary_writer = csv.DictWriter(summary_file, fieldnames=SUMMARY_FIELDS)
-    summary_writer.writeheader()
+    mode = "a" if args.append else "w"
+
+    def _open(path, fields):
+        # In append mode, write the header only if the file is new/empty.
+        write_header = not (args.append and os.path.exists(path) and os.path.getsize(path) > 0)
+        handle = open(path, mode, newline="")
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        if write_header:
+            writer.writeheader()
+        return handle, writer
+
+    iter_file, iter_writer = _open(iter_path, ITER_FIELDS)
+    summary_file, summary_writer = _open(summary_path, SUMMARY_FIELDS)
     summary_file.flush()
 
     print(f"{len(networks)} networks | methods={methods} eps={args.epsilon} "
@@ -397,6 +419,9 @@ def run(args):
                   f"avg_regret={regret_at:.3e} minmax={v_at:.6f} "
                   f"final_gap={final_gap:.2e}", flush=True)
 
+        # Release the per-method index_table profiles before the next network.
+        value_profile.cache_clear()
+
     iter_file.close()
     summary_file.close()
     print(f"\nwrote {iter_path}\nwrote {summary_path}")
@@ -419,7 +444,15 @@ def build_arg_parser():
     p.add_argument("--progress-every", type=int, default=500,
                    help="print an in-run progress line every N iterations (0 = silent)")
     p.add_argument("--seed", type=int, default=0, help="RNG seed for stochastic rollouts")
-    p.add_argument("--limit", type=int, default=0, help="only the first N networks (0 = all)")
+    p.add_argument("--start-id", type=int, default=0,
+                   help="only test networks with network_id >= this (end defaults to the last)")
+    p.add_argument("--end-id", type=int, default=None,
+                   help="optional last network_id to test (default: the last)")
+    p.add_argument("--limit", type=int, default=0,
+                   help="cap to the first N networks after the id filter (0 = no cap)")
+    p.add_argument("--append", action="store_true",
+                   help="append to existing output CSVs (header written only if new); "
+                        "lets you resume/extend across id ranges into one file")
     return p
 
 
