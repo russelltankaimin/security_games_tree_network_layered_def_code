@@ -432,7 +432,7 @@ def build_arg_parser():
     p.add_argument("--ell", default=None,
                    help="predefined ell as comma-separated values (with --mode predefined; "
                         "must match n_controls); default is uniform 1/n")
-    p.add_argument("--rho", type=float, default=1.0, help="discount rate rho (> 0)")
+    p.add_argument("--rho", type=float, default=0.9, help="discount rate rho (> 0)")
     p.add_argument("--timeout", type=float, default=900.0, help="MDP wall-clock budget (s)")
     p.add_argument("--max-states", type=int, default=5_000_000,
                    help="MDP state-count safety cap (0 disables); exceeding it records -1")
