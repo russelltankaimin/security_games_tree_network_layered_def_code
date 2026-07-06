@@ -38,7 +38,7 @@ monitoring V* evaluations are untimed.
 Networks come from exp1/synth_nets_random_ell.csv (structure + probs are used;
 the stored ell is ignored -- l is initialised uniform).
 
-Output
+Output  (the `method` column is coded  1 = exact, 2 = stochastic  to stay compact)
 ------
   <out>_iterations.csv : per-logged-iteration rows
         network_id, method, iteration, opt_gap, rm_regret, objective, cum_runtime_s
@@ -282,6 +282,9 @@ def load_networks(csv_path):
     return sorted(seen.values(), key=lambda r: r["network_id"])
 
 
+# CSV `method` codes (to keep the files compact): 1 = exact, 2 = stochastic.
+METHOD_CODE = {"exact": 1, "stochastic": 2}
+
 ITER_FIELDS = ["network_id", "method", "iteration", "opt_gap", "rm_regret",
                "objective", "cum_runtime_s"]
 SUMMARY_FIELDS = ["network_id", "n_controls", "total_Q", "method", "converged",
@@ -359,7 +362,8 @@ def run(args):
 
             for (t, v_avg, rm_regret, cum_time, _ell) in trajectory:
                 iter_writer.writerow({
-                    "network_id": info["network_id"], "method": method, "iteration": t,
+                    "network_id": info["network_id"], "method": METHOD_CODE[method],
+                    "iteration": t,
                     "opt_gap": f"{v_avg - v_opt:.8f}", "rm_regret": f"{rm_regret:.8f}",
                     "objective": f"{v_avg:.8f}", "cum_runtime_s": f"{cum_time:.6f}",
                 })
@@ -372,7 +376,7 @@ def run(args):
 
             summary_writer.writerow({
                 "network_id": info["network_id"], "n_controls": info["n_controls"],
-                "total_Q": info["total_Q"], "method": method,
+                "total_Q": info["total_Q"], "method": METHOD_CODE[method],
                 "converged": converged,
                 "iters_to_converge": iters_c if iters_c is not None else "",
                 "runtime_to_converge_s": f"{runtime_c:.6f}" if runtime_c is not None else "",
@@ -406,12 +410,12 @@ def build_arg_parser():
     p.add_argument("--out", default=os.path.join(_HERE, "gradient_convergence"),
                    help="output base path (writes <out>_iterations.csv and <out>_summary.csv)")
     p.add_argument("--methods", choices=["exact", "stochastic", "both"], default="both")
-    p.add_argument("--epsilon", type=float, default=1e-2,
+    p.add_argument("--epsilon", type=float, default=1e-3,
                    help="convergence threshold: average external regret < epsilon")
-    p.add_argument("--max-iters", type=int, default=100000, help="iteration cap per run")
+    p.add_argument("--max-iters", type=int, default=500000, help="iteration cap per run")
     p.add_argument("--samples", type=int, default=300, help="rollouts per stochastic gradient")
     p.add_argument("--rho", type=float, default=0.9, help="discount rate rho (> 0)")
-    p.add_argument("--log-every", type=int, default=10, help="monitor/log cadence (iterations)")
+    p.add_argument("--log-every", type=int, default=10, help="monitor`/log cadence (iterations)")
     p.add_argument("--progress-every", type=int, default=500,
                    help="print an in-run progress line every N iterations (0 = silent)")
     p.add_argument("--seed", type=int, default=0, help="RNG seed for stochastic rollouts")
