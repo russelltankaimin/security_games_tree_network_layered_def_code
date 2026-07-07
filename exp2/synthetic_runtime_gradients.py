@@ -29,11 +29,20 @@ Each iteration t we log, for the running-average iterate l_bar_t:
     * rm_regret -- the Hart-Mas-Colell average external regret max_v R_v / t
                    (the regret-matching certificate), and
     * opt_gap   -- the true optimality gap V*(l_bar_t) - V*_opt (for reference).
-CONVERGENCE CRITERION (both methods, same threshold): the average external
-regret falls below --epsilon,  max_v R_v / t < epsilon. V* evaluations are cheap
-(O(Q^2)); V*_opt (the best value the EXACT run attains) is logged only to report
-opt_gap. Only the gradient computation + regret-matching update are timed; the
-monitoring V* evaluations are untimed.
+We stop on the FIRST of two criteria (whichever fires; `stop_reason` records it):
+    (a) "regret":  the average external regret falls below --epsilon,
+                   max_v R_v / t < epsilon  (the theoretical certificate); or
+    (b) "plateau": the monitored objective V*(l_bar_t) has stopped moving --
+                   its relative spread over the last --patience monitored points
+                   is below --obj-tol (and t >= --min-iters). This early-stop
+                   exists because max_v R_v / t is only an O(1/sqrt t) UPPER bound
+                   on the gap, so it can hover above epsilon long after V* has
+                   converged; the plateau test cuts that wasted tail. Set
+                   --patience 0 to disable it and recover the pure-regret rule.
+Runs that hit neither by --max-iters end with stop_reason "max_iters". V*
+evaluations are cheap (O(Q^2)); V*_opt (the best value the EXACT run attains) is
+logged only to report opt_gap. Only the gradient computation + regret-matching
+update are timed; the monitoring V* evaluations are untimed.
 
 Networks come from exp1/synth_nets_random_ell.csv (structure + probs are used;
 the stored ell is ignored -- l is initialised uniform).
@@ -187,14 +196,21 @@ def exact_value(defender_tree, ell, rho):
 
 def run_regret_matching(method, structure, probs, names, defender_tree, rho,
                         max_iters, samples, seed, log_every, label="", progress_every=0,
-                        epsilon=None, v_ref=None):
-    """Run RM from the uniform allocation. Returns a trajectory of monitoring
-    points (iteration, v_avg, rm_regret, cum_runtime, ell_avg) plus totals.
+                        epsilon=None, v_ref=None, obj_tol=0.0, patience=0, min_iters=0):
+    """Run RM from the uniform allocation. Returns
+        (trajectory, total_iters, cum_time, stop_reason, stop_point)
+    where trajectory is a list of monitoring points
+    (iteration, v_avg, rm_regret, cum_runtime, ell_avg) and stop_point is the
+    monitored point at termination (same 5-tuple).
 
-    Only the gradient + update are timed; monitoring V* evals are untimed.
-    Prints a progress line every `progress_every` iterations (0 = silent),
-    including the optimality gap vs `v_ref` (or vs the running-best V* if None),
-    and announces the first iteration whose gap falls to <= `epsilon`."""
+    Termination fires on the FIRST of:
+      * "regret":  max_v R_v / t < epsilon               (the certificate), or
+      * "plateau": the objective V*(l_bar) is stationary -- its relative spread
+                   over the last `patience` monitored points is < obj_tol and
+                   t >= min_iters  (disabled when patience == 0).
+    A run that reaches max_iters ends with stop_reason "max_iters".
+
+    Only the gradient + update are timed; monitoring V* evals are untimed."""
     n = len(names)
     rng = random.Random(f"{seed}:{method}")
     ell = {v: 1.0 / n for v in names}          # uniform initialisation
@@ -203,6 +219,9 @@ def run_regret_matching(method, structure, probs, names, defender_tree, rho,
     cum_time = 0.0
     trajectory = []
     v0 = None                                  # initial (uniform) objective
+    v_window = []                              # recent monitored V*(l_bar) values
+    stop_reason = "max_iters"
+    stop_point = None
 
     for t in range(1, max_iters + 1):
         for v in names:                        # accumulate the played iterate
@@ -230,13 +249,15 @@ def run_regret_matching(method, structure, probs, names, defender_tree, rho,
         if method == "stochastic":
             value_profile.cache_clear()
 
-        # Average external regret (cheap) drives the convergence test every iter.
+        # Average external regret (cheap) drives the certificate test every iter.
         rm_regret = max(0.0, max(cumulative_regret.values())) / t
-        converged = epsilon is not None and rm_regret < epsilon
+        regret_hit = epsilon is not None and rm_regret < epsilon
 
-        is_log = (t == 1 or t % log_every == 0 or t == max_iters or converged)
+        # We only know the objective (and hence plateau) on monitored points.
+        is_log = (t == 1 or t % log_every == 0 or t == max_iters or regret_hit)
         is_progress = progress_every and (
-            t == 1 or t % progress_every == 0 or t == max_iters or converged)
+            t == 1 or t % progress_every == 0 or t == max_iters or regret_hit)
+        plateau_hit = False
         if is_log or is_progress:
             ell_avg = {v: ell_sum[v] / t for v in names}
             v_avg = exact_value(defender_tree, ell_avg, rho)     # untimed monitor
@@ -245,18 +266,34 @@ def run_regret_matching(method, structure, probs, names, defender_tree, rho,
             gap = None if v_ref is None else v_avg - v_ref        # gap vs v_opt
             if is_log:
                 trajectory.append((t, v_avg, rm_regret, cum_time, ell_avg))
-            if is_progress and not converged:
+                # Objective-plateau test on the fixed log cadence.
+                v_window.append(v_avg)
+                if len(v_window) > patience:
+                    v_window.pop(0)
+                if (patience and t >= min_iters and len(v_window) == patience):
+                    scale = max(abs(max(v_window)), abs(min(v_window)), 1e-12)
+                    if (max(v_window) - min(v_window)) / scale < obj_tol:
+                        plateau_hit = True
+            if is_progress and not (regret_hit or plateau_hit):
                 gap_str = f"gap={gap:+.2e}  " if gap is not None else ""
                 print(f"    [{label}] iter {t:>6}/{max_iters}  V*={v_avg:.6f}  "
                       f"{gap_str}regret={rm_regret:.3e}  drop={v0 - v_avg:.4f}  "
                       f"{cum_time:6.1f}s", flush=True)
 
-        if converged:                          # TERMINATE on the criterion
-            print(f"    [{label}] *** converged: avg regret < {epsilon:g} at iter {t} "
-                  f"({cum_time:.2f}s) ***", flush=True)
+        if regret_hit or plateau_hit:          # TERMINATE on the first criterion
+            stop_reason = "regret" if regret_hit else "plateau"
+            stop_point = (t, v_avg, rm_regret, cum_time, ell_avg)
+            if stop_reason == "regret":
+                msg = f"avg regret < {epsilon:g}"
+            else:
+                msg = f"V* plateau (rel spread < {obj_tol:g} over {patience} pts)"
+            print(f"    [{label}] *** stop [{stop_reason}]: {msg} at iter {t} "
+                  f"({cum_time:.2f}s, regret={rm_regret:.3e}) ***", flush=True)
             break
 
-    return trajectory, t, cum_time
+    if stop_point is None:                     # reached max_iters: use last point
+        stop_point = trajectory[-1]
+    return trajectory, t, cum_time, stop_reason, stop_point
 
 
 def indices_by_control(structure, probs, ell, rho, names):
@@ -297,23 +334,20 @@ METHOD_CODE = {"exact": 1, "stochastic": 2}
 ITER_FIELDS = ["network_id", "method", "iteration", "opt_gap", "rm_regret",
                "objective", "cum_runtime_s"]
 SUMMARY_FIELDS = ["network_id", "n_controls", "total_Q", "method", "converged",
-                  "iters_to_converge", "runtime_to_converge_s", "avg_regret_at_converge",
-                  "total_iters", "total_runtime_s", "converged_minmax_value",
-                  "final_opt_gap", "v_opt", "epsilon", "samples",
-                  "final_ell", "final_indices"]
+                  "stop_reason", "iters_to_converge", "runtime_to_converge_s",
+                  "avg_regret_at_converge", "total_iters", "total_runtime_s",
+                  "converged_minmax_value", "final_opt_gap", "v_opt", "epsilon",
+                  "samples", "final_ell", "final_indices"]
 
 
-def summarise(trajectory, v_opt, epsilon):
-    """Find the first monitored point with average regret < epsilon; also return
-    the min-max value V*(l_bar) and allocation there (or the last point if never
-    converged)."""
-    converged, iters_c, runtime_c = False, None, None
-    v_at, ell_at, regret_at = trajectory[-1][1], trajectory[-1][4], trajectory[-1][2]
-    for (t, v_avg, rm_regret, cum_time, ell_avg) in trajectory:
-        if rm_regret < epsilon:
-            converged, iters_c, runtime_c = True, t, cum_time
-            v_at, ell_at, regret_at = v_avg, ell_avg, rm_regret
-            break
+def summarise(trajectory, v_opt, stop_reason, stop_point):
+    """Report the min-max value V*(l_bar) and allocation at the point the run
+    actually stopped (regret or plateau); `converged` is True whenever either
+    convergence criterion fired (i.e. not a max_iters cutoff)."""
+    t_at, v_at, regret_at, runtime_at, ell_at = stop_point
+    converged = stop_reason in ("regret", "plateau")
+    iters_c = t_at if converged else None
+    runtime_c = runtime_at if converged else None
     final_gap = trajectory[-1][1] - v_opt
     return converged, iters_c, runtime_c, final_gap, v_at, ell_at, regret_at
 
@@ -347,8 +381,11 @@ def run(args):
     summary_file, summary_writer = _open(summary_path, SUMMARY_FIELDS)
     summary_file.flush()
 
+    plateau = (f"obj_tol={args.obj_tol} patience={args.patience} min_iters={args.min_iters}"
+               if args.patience else "plateau=off")
     print(f"{len(networks)} networks | methods={methods} eps={args.epsilon} "
-          f"max_iters={args.max_iters} samples={args.samples} rho={args.rho}\n", flush=True)
+          f"max_iters={args.max_iters} samples={args.samples} rho={args.rho} | {plateau}\n",
+          flush=True)
 
     for idx, info in enumerate(networks, 1):
         if info["probs"] is None:
@@ -365,7 +402,8 @@ def run(args):
             "exact", info["structure"], info["probs"], names, defender_tree,
             args.rho, args.max_iters, args.samples, args.seed, args.log_every,
             label=f"net {info['network_id']} exact", progress_every=args.progress_every,
-            epsilon=args.epsilon, v_ref=None)
+            epsilon=args.epsilon, v_ref=None,
+            obj_tol=args.obj_tol, patience=args.patience, min_iters=args.min_iters)
         v_opt = min(pt[1] for pt in traj["exact"][0])
 
         if "stochastic" in methods:
@@ -375,12 +413,13 @@ def run(args):
                 "stochastic", info["structure"], info["probs"], names, defender_tree,
                 args.rho, args.max_iters, args.samples, args.seed, args.log_every,
                 label=f"net {info['network_id']} stoch", progress_every=args.progress_every,
-                epsilon=args.epsilon, v_ref=v_opt)
+                epsilon=args.epsilon, v_ref=v_opt,
+                obj_tol=args.obj_tol, patience=args.patience, min_iters=args.min_iters)
 
         for method in methods:
-            trajectory, total_iters, total_time = traj[method]
+            trajectory, total_iters, total_time, stop_reason, stop_point = traj[method]
             converged, iters_c, runtime_c, final_gap, v_at, ell_at, regret_at = summarise(
-                trajectory, v_opt, args.epsilon)
+                trajectory, v_opt, stop_reason, stop_point)
 
             for (t, v_avg, rm_regret, cum_time, _ell) in trajectory:
                 iter_writer.writerow({
@@ -399,7 +438,7 @@ def run(args):
             summary_writer.writerow({
                 "network_id": info["network_id"], "n_controls": info["n_controls"],
                 "total_Q": info["total_Q"], "method": METHOD_CODE[method],
-                "converged": converged,
+                "converged": converged, "stop_reason": stop_reason,
                 "iters_to_converge": iters_c if iters_c is not None else "",
                 "runtime_to_converge_s": f"{runtime_c:.6f}" if runtime_c is not None else "",
                 "avg_regret_at_converge": f"{regret_at:.8f}",
@@ -415,7 +454,7 @@ def run(args):
             iters_disp = iters_c if iters_c else total_iters
             rt_disp = runtime_c if runtime_c is not None else total_time
             print(f"  -> {method:>10}: converged={str(converged):>5} "
-                  f"iters={iters_disp:>6} runtime={rt_disp:8.3f}s "
+                  f"[{stop_reason:>8}] iters={iters_disp:>6} runtime={rt_disp:8.3f}s "
                   f"avg_regret={regret_at:.3e} minmax={v_at:.6f} "
                   f"final_gap={final_gap:.2e}", flush=True)
 
@@ -437,6 +476,16 @@ def build_arg_parser():
     p.add_argument("--methods", choices=["exact", "stochastic", "both"], default="both")
     p.add_argument("--epsilon", type=float, default=1e-3,
                    help="convergence threshold: average external regret < epsilon")
+    p.add_argument("--obj-tol", type=float, default=1e-4,
+                   help="objective-plateau tolerance: stop when the relative spread of "
+                        "V*(l_bar) over the last --patience monitored points < this "
+                        "(cuts the tail where regret hovers above --epsilon)")
+    p.add_argument("--patience", type=int, default=50,
+                   help="number of consecutive monitored (log-cadence) points the "
+                        "objective must stay within --obj-tol to stop; 0 disables the "
+                        "plateau rule (pure regret certificate)")
+    p.add_argument("--min-iters", type=int, default=2000,
+                   help="do not allow a plateau stop before this iteration")
     p.add_argument("--max-iters", type=int, default=500000, help="iteration cap per run")
     p.add_argument("--samples", type=int, default=300, help="rollouts per stochastic gradient")
     p.add_argument("--rho", type=float, default=0.9, help="discount rate rho (> 0)")

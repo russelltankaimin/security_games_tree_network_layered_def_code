@@ -246,33 +246,71 @@ def parallel_profile(left_profile, right_profile):
     return PiecewiseLinearProfile(breakpoints, values)
 
 
+_SERIES_MERGE_TOL = 1e-12   # drop near-duplicate breakpoints (avoids ~0-width pieces)
+
+
 def series_profile(upstream_profile, downstream_profile):
-    """Chain of two blocks:  profile(s) = downstream(s) * upstream(s / downstream(s))."""
-    breakpoints = {0.0, 1.0} | set(downstream_profile.breakpoints)
-    # Add breakpoints where the relocated argument s/downstream(s) crosses an
-    # upstream breakpoint; on each linear piece of the downstream profile this is
-    # a simple closed-form solve.
-    for piece in range(len(downstream_profile.breakpoints) - 1):
-        x0 = downstream_profile.breakpoints[piece]
-        x1 = downstream_profile.breakpoints[piece + 1]
-        value0 = downstream_profile.values[piece]
-        slope = (downstream_profile.values[piece + 1] - value0) / (x1 - x0)
-        intercept = value0 - slope * x0                       # downstream(s) = intercept + slope*s
-        for upstream_breakpoint in upstream_profile.breakpoints:
-            denominator = 1 - upstream_breakpoint * slope
-            if abs(denominator) < _ZERO_DIVISION_GUARD:
-                continue
-            s = upstream_breakpoint * intercept / denominator
-            if x0 - _THRESHOLD_TOL <= s <= x1 + _THRESHOLD_TOL and 0 <= s <= 1:
-                breakpoints.add(min(1, max(0, s)))
-    ordered_breakpoints = sorted(breakpoints)
+    """Chain of two blocks:  profile(s) = downstream(s) * upstream(s / downstream(s)).
+
+    The breakpoints are the knots of R = downstream together with the s at which
+    the relocated argument u(s) = s / R(s) hits a knot of P = upstream.
+
+    Linear-merge implementation (mirrors sp_attacker.PiecewiseLinear.series).
+    Because R is nondecreasing, 1-Lipschitz, and R(s) >= s, the argument u(s) is
+    monotone nondecreasing. So u at R's knots is already sorted, and each interior
+    upstream knot's pre-image is found by advancing a single pointer over R's
+    pieces -- O(|R| + |P|), instead of the O(|R| * |P|) double loop.
+    """
+    R, P = downstream_profile, upstream_profile
+    Rx, Ry = R.breakpoints, R.values
+
+    def argument(s, r_value):
+        """u(s) = s / R(s), clamped to [0, 1] (0 if R(s) ~ 0)."""
+        return 0.0 if r_value <= _ZERO_DIVISION_GUARD else min(max(s / r_value, 0.0), 1.0)
+
+    # u at each downstream knot -- sorted, since u is monotone.
+    u_at_knot = [argument(Rx[i], Ry[i]) for i in range(len(Rx))]
+
+    # Pre-image s of each interior upstream knot, in increasing order, located by
+    # a single forward sweep over R's pieces.
+    preimages = []
+    piece = 0
+    for u in P.breakpoints:
+        if u <= _ZERO_DIVISION_GUARD or u >= 1.0 - _ZERO_DIVISION_GUARD:
+            continue  # u = 0 -> s = 0; u = 1 -> s = alpha_R; both are R knots
+        while piece + 1 < len(u_at_knot) and u_at_knot[piece + 1] < u:
+            piece += 1
+        ax, bx = Rx[piece], Rx[piece + 1]
+        ay, by = Ry[piece], Ry[piece + 1]
+        slope = (by - ay) / (bx - ax)
+        intercept = ay - slope * ax           # R(s) = intercept + slope * s here
+        denom = 1.0 - u * slope               # solve s / R(s) = u for s
+        if abs(denom) < _ZERO_DIVISION_GUARD:
+            continue
+        preimages.append(min(max(u * intercept / denom, ax), bx))
+
+    # Merge the two already-sorted breakpoint sources (R's knots and the
+    # pre-images), dropping duplicates.
+    ordered_breakpoints = []
+    i = j = 0
+    while i < len(Rx) or j < len(preimages):
+        if j >= len(preimages) or (i < len(Rx) and Rx[i] <= preimages[j]):
+            candidate = Rx[i]
+            i += 1
+        else:
+            candidate = preimages[j]
+            j += 1
+        candidate = min(1.0, max(0.0, candidate))
+        if not ordered_breakpoints or candidate - ordered_breakpoints[-1] > _SERIES_MERGE_TOL:
+            ordered_breakpoints.append(candidate)
+
     values = []
     for s in ordered_breakpoints:
-        downstream_value = downstream_profile(s)
+        downstream_value = R(s)
         if downstream_value <= _ZERO_DIVISION_GUARD:
             values.append(0.0)
         else:
-            values.append(downstream_value * upstream_profile(s / downstream_value))
+            values.append(downstream_value * P(argument(s, downstream_value)))
     return PiecewiseLinearProfile(ordered_breakpoints, values)
 
 
