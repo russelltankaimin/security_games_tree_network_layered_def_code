@@ -422,8 +422,12 @@ def run(args):
                                         args.rho, args.eval_samples, def_rng, names)
 
         final_ell = {v: round(ell_star[v], 6) for v in names}
-        final_indices = indices_by_control(
+        # Gittins indices describe only the OPTIMAL attacker's policy at l*, so
+        # log them only when some role is `index`; otherwise no one uses them.
+        uses_index = "index" in (args.defender_policy, args.attacker_policy)
+        final_indices = (indices_by_control(
             info["structure"], info["probs"], ell_star, args.rho, names)
+            if uses_index else {})
 
         writer.writerow({
             "network_id": info["network_id"], "n_controls": info["n_controls"],
