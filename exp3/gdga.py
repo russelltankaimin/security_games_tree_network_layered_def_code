@@ -411,6 +411,8 @@ def run(args):
             label=f"net {info['network_id']}", progress_every=args.progress_every)
 
         # 2) Value the ACTUAL attacker (--attacker-policy) achieves at the fixed l*.
+        #    Exact where possible: the `index` attacker is evaluated by the exact
+        #    O(Q^2) fold; any other policy is estimated by Monte-Carlo rollouts.
         att_rng = random.Random(f"{args.seed}:eval_att")
         attacker_value = policy_value(args.attacker_policy, info["structure"],
                                       info["probs"], defender_tree, ell_star,
@@ -446,10 +448,11 @@ def run(args):
             "final_indices": json.dumps(final_indices),
         })
         out_file.flush()
-        print(f"  -> stop=[{stop_reason}] iters={iters} opt_time={opt_time:.3f}s "
-              f"assumed({args.defender_policy})~{defender_assumed:.6f}  "
-              f"actual({args.attacker_policy})={attacker_value:.6f}  "
-              f"gap={attacker_value - defender_assumed:+.6f}", flush=True)
+        X, Y = args.defender_policy, args.attacker_policy
+        print(f"  -> stop=[{stop_reason}] iters={iters} opt_time={opt_time:.3f}s\n"
+              f"       V* defender      V_{X}(l*) = {defender_assumed:.6f}\n"
+              f"       attacker value   V_{Y}(l*) = {attacker_value:.6f}   ({Y} playing l*)",
+              flush=True)
 
     out_file.close()
     print(f"\nwrote {args.out}")
