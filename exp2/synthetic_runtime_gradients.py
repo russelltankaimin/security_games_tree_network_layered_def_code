@@ -488,7 +488,7 @@ def build_arg_parser():
                    help="do not allow a plateau stop before this iteration")
     p.add_argument("--max-iters", type=int, default=500000, help="iteration cap per run")
     p.add_argument("--samples", type=int, default=300, help="rollouts per stochastic gradient")
-    p.add_argument("--rho", type=float, default=0.9, help="discount rate rho (> 0)")
+    p.add_argument("--rho", type=float, default=1.0, help="discount rate rho (> 0)")
     p.add_argument("--log-every", type=int, default=10, help="monitor`/log cadence (iterations)")
     p.add_argument("--progress-every", type=int, default=500,
                    help="print an in-run progress line every N iterations (0 = silent)")
