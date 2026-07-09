@@ -33,8 +33,12 @@ retiring first becomes optimal, `alpha(v, k) = inf{ gamma : Psi(gamma) = gamma }
 The optimal policy is greedy: always attack the live control of highest index
 (Gittins' theorem, specialised to this setting).
 
-The whole pipeline runs in O(Q^2) time, where Q is the total number of control
-states, sidestepping the exponential joint-state MDP.
+With the linear-merge Series compose and the closed-form leaf solve, the whole
+pipeline runs in O(Q * d) time and O(Q) space, where Q is the total number of
+control states and d is the height of the series--parallel decomposition tree
+(so O(Q log n) on balanced networks, O(Q^2) only on a degenerate chain). This
+sidesteps the exponential joint-state MDP. Non-monotone controls (violating
+Assumption 2) fall back to an exact O(Q^2)-per-leaf recursion.
 """
 
 from __future__ import annotations
@@ -334,6 +338,89 @@ def _control_recursion(
     return psi, indices
 
 
+def _is_monotone(control: Control) -> bool:
+    """Whether the success probabilities are non-increasing (Assumption 2)."""
+    ps = control.ps
+    return all(ps[i] >= ps[i + 1] - 1e-15 for i in range(len(ps) - 1))
+
+
+def _solve_leaf_closed_form(
+    control: Control, reward: PiecewiseLinear
+) -> Tuple[PiecewiseLinear, List[float]]:
+    """Closed-form single-control solve against a reward *profile*, in
+    O(q_v + |reward|) time.
+
+    Returns the same head profile Psi(.; 0) and indices as `_control_recursion`,
+    but without rebuilding the profile at every failure count. Requires a
+    monotone control; two facts (both from Assumption 2) make it linear:
+
+    * Indices. alpha(v, k) is the unique fixed point gamma = c_hat(v, k) * R(gamma),
+      and c_hat(v, k) is non-increasing in k, so the fixed points are too. A
+      single pointer descending over R's linear pieces locates all q_v of them.
+
+    * Head profile. Where the optimal policy attacks exactly k times before
+      stopping, the value is A_k * R(gamma) + B_k * gamma, with
+          B_k = prod_{j<k} beta (1 - p(j)),
+          A_k = sum_{j<k} [prod_{i<j} beta (1 - p(i))] beta p(j),
+      accumulated in O(1) per k. The region boundaries are exactly the
+      alpha(v, k), which we merge with R's own knots.
+    """
+    beta, ps, q = control.beta, control.ps, control.q
+    Rx, Ry = reward.xs, reward.ys
+    chat = [beta * p / (1.0 - beta * (1.0 - p)) for p in ps]  # non-increasing in k
+
+    # -- indices: alpha(v, k) = fixed point of gamma = chat[k] * R(gamma) -------
+    # Solutions decrease with k, so sweep R's pieces top-down with one pointer.
+    alphas = [0.0] * q
+    piece = len(Rx) - 2
+    for k in range(q):
+        ck = chat[k]
+        while True:
+            ax, bx = Rx[piece], Rx[piece + 1]
+            ay, by = Ry[piece], Ry[piece + 1]
+            b = (by - ay) / (bx - ax)
+            a = ay - b * ax  # R(gamma) = a + b * gamma on this piece
+            denom = 1.0 - ck * b
+            gamma = ck * a / denom if abs(denom) > 1e-15 else 0.0
+            if gamma >= ax - 1e-9 or piece == 0:
+                break
+            piece -= 1
+        alphas[k] = min(max(gamma, ax), bx)
+
+    # -- head profile Psi(.; 0): value A_k * R + B_k * gamma on region k --------
+    A = [0.0] * (q + 1)
+    B = [1.0] * (q + 1)
+    for k in range(1, q + 1):
+        B[k] = B[k - 1] * beta * (1.0 - ps[k - 1])
+        A[k] = A[k - 1] + B[k - 1] * beta * ps[k - 1]
+
+    # Breakpoints = region boundaries (the alphas) merged with R's own knots.
+    knots = {0.0, 1.0}
+    knots.update(alphas)
+    knots.update(min(max(x, 0.0), 1.0) for x in Rx)
+    xs = sorted(knots)
+    ascending_alphas = sorted(alphas)
+    ys: List[float] = []
+    for gamma in xs:
+        # region k = number of attacks before stopping = q - (#alphas <= gamma)
+        k = q - bisect.bisect_right(ascending_alphas, gamma + 1e-12)
+        k = 0 if k < 0 else q if k > q else k
+        ys.append(A[k] * reward(gamma) + B[k] * gamma)
+    return PiecewiseLinear(xs, ys), alphas
+
+
+def _leaf_solve(
+    control: Control, reward: PiecewiseLinear
+) -> Tuple[PiecewiseLinear, List[float]]:
+    """Single-control solve used by both passes. Uses the O(q + |R|) closed form
+    for monotone controls (Assumption 2) and falls back to the exact O(q|R|)
+    recursion otherwise, so correctness never depends on monotonicity.
+    """
+    if _is_monotone(control):
+        return _solve_leaf_closed_form(control, reward)
+    return _control_recursion(control, reward)
+
+
 # ===========================================================================
 # Phase 1 -- the value fold
 # ===========================================================================
@@ -351,7 +438,7 @@ def value_profile(net: Network) -> PiecewiseLinear:
     Returned profiles are treated as immutable (the lru_cache shares them).
     """
     if isinstance(net, Control):
-        head_profile, _ = _control_recursion(net, _UNIT_REWARD)
+        head_profile, _ = _leaf_solve(net, _UNIT_REWARD)
         return head_profile
     if isinstance(net, Par):
         return value_profile(net.left).parallel_with(value_profile(net.right))
@@ -388,7 +475,7 @@ def index_table(net: Network) -> Dict[ControlState, float]:
 
     def collect(node: Network, reward: PiecewiseLinear) -> None:
         if isinstance(node, Control):
-            _, indices = _control_recursion(node, reward)
+            _, indices = _leaf_solve(node, reward)
             for k, alpha in enumerate(indices):
                 table[(node.name, k)] = alpha
         elif isinstance(node, Par):
