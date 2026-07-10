@@ -11,10 +11,11 @@ Reference implementation of the optimal adaptive attacker on a series--parallel
 
 Model (see the accompanying note for the full formalism)
 --------------------------------------------------------
-A network is built from single *controls* by two constructors:
+A network is built from single *controls* by two n-ary constructors (>= 2
+children each):
 
-    Series(G1, G2)  : clear G1, then clear G2          (sequential)
-    Par(G1, G2)     : clear G1 OR G2 -- a race          (either branch wins)
+    Series(G1, ..., Gk)  : clear G1, then G2, ... then Gk       (sequential)
+    Par(G1, ..., Gk)     : clear ANY one of G1..Gk -- a race    (any branch wins)
 
 Attacking a control takes one attempt; with the control's per-attempt discount
 `beta` the attempt succeeds with probability `p(k)` where `k` is the number of
@@ -81,30 +82,62 @@ class Control:
         return len(self.ps)
 
 
-@dataclass(frozen=True)
-class Series:
-    """Sequential composition: clear `left`, then clear `right`."""
+class _CompositeNode:
+    """Base for the n-ary composites Series and Par (>= 2 children).
 
-    left: "Network"
-    right: "Network"
+    Children are stored in a tuple. For backward compatibility with the binary
+    recursions and external callers, `.left`/`.right` expose the RIGHT-FOLD binary
+    view: `.left` is the first child and `.right` is the composite of the rest (a
+    single child if only one remains). Because Series and Par are associative (Par
+    also commutative), walking this binary view yields identical values and indices
+    to folding the children natively -- which the native n-ary functions verify.
+    """
+
+    __slots__ = ("children",)
+
+    def __init__(self, *children: "Network") -> None:
+        if len(children) < 2:
+            raise ValueError(f"{type(self).__name__} needs >= 2 children")
+        self.children: Tuple["Network", ...] = tuple(children)
+
+    @property
+    def left(self) -> "Network":
+        return self.children[0]
+
+    @property
+    def right(self) -> "Network":
+        rest = self.children[1:]
+        return rest[0] if len(rest) == 1 else type(self)(*rest)
+
+    def __eq__(self, other: object) -> bool:
+        return type(self) is type(other) and self.children == other.children  # type: ignore[attr-defined]
+
+    def __hash__(self) -> int:
+        return hash((type(self).__name__, self.children))
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({', '.join(repr(c) for c in self.children)})"
 
 
-@dataclass(frozen=True)
-class Par:
-    """Parallel (OR) composition: completing either branch wins the block."""
+class Series(_CompositeNode):
+    """Sequential composition: clear every child in order (n-ary, >= 2)."""
 
-    left: "Network"
-    right: "Network"
+
+class Par(_CompositeNode):
+    """Parallel (OR) composition: completing ANY child wins the block (n-ary, >= 2)."""
 
 
 Network = Union[Control, Series, Par]
 
 
 def controls(net: Network) -> List[Control]:
-    """Return all controls (leaves) of `net`, left-to-right."""
+    """Return all controls (leaves) of `net`, left-to-right (n-ary safe)."""
     if isinstance(net, Control):
         return [net]
-    return controls(net.left) + controls(net.right)
+    result: List[Control] = []
+    for child in net.children:
+        result += controls(child)
+    return result
 
 
 def single_control_index(beta: float, p: float) -> float:
@@ -219,6 +252,25 @@ class PiecewiseLinear:
             slope_self = (self(b) - self(a)) / (b - a)
             slope_other = (other(b) - other(a)) / (b - a)
             ys[i] = ys[i + 1] - slope_self * slope_other * (b - a)
+        return PiecewiseLinear(grid, ys)
+
+    @staticmethod
+    def parallel_many(profiles: List["PiecewiseLinear"]) -> "PiecewiseLinear":
+        """N-ary race of k >= 2 branches: the k-way generalisation of
+        `parallel_with`, where the integrand is the PRODUCT of all branch
+        derivatives (independent branches -> product survival):
+
+            Psi_Par(gamma) = 1 - integral_gamma^1 prod_i g_i'(z) dz.
+        """
+        grid = sorted(set().union(*(set(p.xs) for p in profiles)))
+        ys = [0.0] * len(grid)
+        ys[-1] = 1.0
+        for i in range(len(grid) - 2, -1, -1):
+            a, b = grid[i], grid[i + 1]
+            slope_product = 1.0
+            for p in profiles:
+                slope_product *= (p(b) - p(a)) / (b - a)
+            ys[i] = ys[i + 1] - slope_product * (b - a)
         return PiecewiseLinear(grid, ys)
 
     @staticmethod
@@ -430,20 +482,27 @@ def _leaf_solve(
 def value_profile(net: Network) -> PiecewiseLinear:
     """Phase 1: the calibrated value Psi_net as a function of the buyout gamma.
 
-    Computed bottom-up over the parse tree:
-        Control  : the single-control recursion against a unit reward;
-        Par(L,R) : combine child values by the parallel rule;
-        Series(L,R): compose child values by the series rule (R downstream).
+    Native n-ary fold, bottom-up over the parse tree:
+        Control : single-control recursion against a unit reward;
+        Par     : 1 - integral of the PRODUCT of all branch derivatives;
+        Series  : suffix fold of the series rule over the children in order.
 
-    Returned profiles are treated as immutable (the lru_cache shares them).
+    (Series and Par are associative, so this equals the right-folded binary
+    result; Par is also commutative.) Profiles are immutable (lru_cache shares them).
     """
     if isinstance(net, Control):
         head_profile, _ = _leaf_solve(net, _UNIT_REWARD)
         return head_profile
     if isinstance(net, Par):
-        return value_profile(net.left).parallel_with(value_profile(net.right))
-    # Series: upstream = left is solved against downstream = value of right.
-    return PiecewiseLinear.series(value_profile(net.right), value_profile(net.left))
+        return PiecewiseLinear.parallel_many(
+            [value_profile(child) for child in net.children])
+    # Series: value = series(downstream = value(rest), upstream = value(first)),
+    # accumulated right-to-left over the children.
+    children = net.children
+    profile = value_profile(children[-1])
+    for child in reversed(children[:-1]):
+        profile = PiecewiseLinear.series(profile, value_profile(child))
+    return profile
 
 
 def game_value(net: Network) -> float:
@@ -465,11 +524,19 @@ def index_table(net: Network) -> Dict[ControlState, float]:
     """Phase 2: the index alpha(v, k) of every control state in `net`.
 
     Each control is solved against the value profile of *its forward cone* (the
-    prize unlocked by clearing it). We thread that downstream reward profile
-    through the tree, starting from the unit reward at the root:
-        Series(L, R): R keeps the incoming reward; L sees `series(reward, value(R))`;
-        Par(L, R)   : both branches inherit the same reward;
-        Control     : record the crossings from the single-control recursion.
+    prize unlocked by clearing it), threaded through the tree from the unit reward
+    at the root (native n-ary):
+
+    * Par threads the SAME incoming reward to EVERY branch. Winning any one branch
+      completes the race, so a branch's forward cone never involves its siblings --
+      this independence is exactly the Gittins decomposition ("alpha(i, j, k) is a
+      function of chain i alone").
+    * Series threads the reward through the value profiles of the DOWNSTREAM
+      siblings: control c_i (i-th of k, in order) sees
+          series(reward, value(composite(c_{i+1..k}))),
+      built by sweeping the children right-to-left while extending the downstream
+      cone. The last child sees the incoming reward directly.
+    * Control records the crossings from the single-control recursion.
     """
     table: Dict[ControlState, float] = {}
 
@@ -479,11 +546,18 @@ def index_table(net: Network) -> Dict[ControlState, float]:
             for k, alpha in enumerate(indices):
                 table[(node.name, k)] = alpha
         elif isinstance(node, Par):
-            collect(node.left, reward)
-            collect(node.right, reward)
-        else:  # Series: clearing left leads to right, which leads to `reward`.
-            collect(node.right, reward)
-            collect(node.left, PiecewiseLinear.series(reward, value_profile(node.right)))
+            for child in node.children:          # every branch shares the reward
+                collect(child, reward)
+        else:  # Series: sweep right-to-left, extending the downstream forward cone
+            downstream: Optional[PiecewiseLinear] = None
+            for child in reversed(node.children):
+                if downstream is None:           # last child: incoming reward directly
+                    collect(child, reward)
+                else:
+                    collect(child, PiecewiseLinear.series(reward, downstream))
+                downstream = (
+                    value_profile(child) if downstream is None
+                    else PiecewiseLinear.series(downstream, value_profile(child)))
 
     collect(net, _UNIT_REWARD)
     return table
@@ -525,17 +599,18 @@ def block_status(net: Network, state: AttackState) -> Status:
     if isinstance(net, Control):
         s = state[net.name]
         return s if isinstance(s, Status) else Status.LIVE
-    left, right = block_status(net.left, state), block_status(net.right, state)
+    statuses = [block_status(child, state) for child in net.children]
     if isinstance(net, Series):
-        if left is Status.DEAD:
-            return Status.DEAD
-        if left is Status.WON:
-            return right
-        return Status.LIVE
+        for status in statuses:                  # the first not-yet-won child decides
+            if status is Status.DEAD:
+                return Status.DEAD
+            if status is Status.LIVE:
+                return Status.LIVE
+        return Status.WON                         # all children won
     # Par
-    if left is Status.WON or right is Status.WON:
+    if any(status is Status.WON for status in statuses):
         return Status.WON
-    if left is Status.DEAD and right is Status.DEAD:
+    if all(status is Status.DEAD for status in statuses):
         return Status.DEAD
     return Status.LIVE
 
@@ -551,10 +626,15 @@ def frontier(net: Network, state: AttackState) -> List[ControlState]:
     if isinstance(net, Control):
         return [(net.name, state[net.name])]  # state value is the int count
     if isinstance(net, Series):
-        if block_status(net.left, state) is Status.WON:
-            return frontier(net.right, state)
-        return frontier(net.left, state)
-    return frontier(net.left, state) + frontier(net.right, state)
+        for child in net.children:               # skip won children, expose the first live one
+            if block_status(child, state) is Status.WON:
+                continue
+            return frontier(child, state)
+        return []
+    result: List[ControlState] = []               # Par: expose every live branch
+    for child in net.children:
+        result += frontier(child, state)
+    return result
 
 
 def apply_outcome(state: AttackState, control: Control, success: bool) -> AttackState:

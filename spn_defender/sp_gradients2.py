@@ -146,8 +146,10 @@ def pointwise_max(profile_a, profile_b):
 
 
 # =========================================================================
-# Tree node types. Series/Parallel hold a tuple of children; after
-# normalisation that tuple always has exactly two entries (left, right).
+# Tree node types. Series/Parallel hold a tuple of children. The binary fold
+# (to_binary_tree) reduces that tuple to exactly two entries; the NATIVE n-ary
+# path (compute_profiles_nary / compute_gradient_nary) instead operates on the
+# original >= 2 children directly.
 # =========================================================================
 ControlNode = namedtuple("ControlNode", ["name", "lockout", "success_probs"])
 SeriesNode = namedtuple("SeriesNode", ["children"])
@@ -193,8 +195,10 @@ def to_binary_tree(node):
 def collect_controls(node):
     if isinstance(node, ControlNode):
         return [node]
-    left, right = node.children
-    return collect_controls(left) + collect_controls(right)
+    result = []
+    for child in node.children:          # n-ary safe (binary has exactly 2)
+        result += collect_controls(child)
+    return result
 
 
 # =========================================================================
@@ -242,6 +246,23 @@ def parallel_profile(left_profile, right_profile):
         left, right = breakpoints[i], breakpoints[i + 1]
         midpoint = 0.5 * (left + right)
         slope_product = left_profile.right_slope(midpoint) * right_profile.right_slope(midpoint)
+        values[i] = values[i + 1] - slope_product * (right - left)
+    return PiecewiseLinearProfile(breakpoints, values)
+
+
+def parallel_profile_nary(profiles):
+    """N-ary race of k >= 2 branches. As in the binary case the combined profile's
+    slope is the PRODUCT of the branch slopes (independent branches -> survival is
+    a product), so profile(s) = 1 - integral_s^1 prod_i g_i'."""
+    breakpoints = sorted(set().union(*(set(p.breakpoints) for p in profiles)))
+    values = [None] * len(breakpoints)
+    values[-1] = 1.0
+    for i in range(len(breakpoints) - 2, -1, -1):
+        left, right = breakpoints[i], breakpoints[i + 1]
+        midpoint = 0.5 * (left + right)
+        slope_product = 1.0
+        for p in profiles:
+            slope_product *= p.right_slope(midpoint)
         values[i] = values[i + 1] - slope_product * (right - left)
     return PiecewiseLinearProfile(breakpoints, values)
 
@@ -369,6 +390,44 @@ def step_function_to_weight_list(step_function, breakpoints):
     return weight_list
 
 
+def _leave_one_out_weight_lists(child_profiles, cumulative, knots):
+    """Backward weight list for every child of an n-ary parallel node at once.
+
+    Child i's step function is  z -> cumulative(z) * prod_{j != i} g_j'(z), the
+    leave-one-out product of the OTHER branches' right-slopes. At each knot the k
+    leave-one-out products are obtained from prefix/suffix products of the slope
+    vector in O(k), so the whole routine is O(k * |knots|) rather than the naive
+    O(k^2 * |knots|). The per-child bookkeeping (right-limit sampling, interior
+    jump extraction, tolerance filtering) is identical to
+    step_function_to_weight_list, so the output matches it child-for-child."""
+    k = len(child_profiles)
+
+    def leave_one_out_at(z):
+        slopes = [p.right_slope(z) for p in child_profiles]
+        prefix = [1.0] * (k + 1)                     # prefix[i] = prod slopes[:i]
+        for j in range(k):
+            prefix[j + 1] = prefix[j] * slopes[j]
+        suffix = [1.0] * (k + 1)                     # suffix[i] = prod slopes[i:]
+        for j in range(k - 1, -1, -1):
+            suffix[j] = suffix[j + 1] * slopes[j]
+        scale = cumulative(z)
+        return [scale * prefix[i] * suffix[i + 1] for i in range(k)]  # omit slope i
+
+    first = leave_one_out_at(_RIGHT_LIMIT_EPS)
+    weight_lists = [[(0.0, first[i])] for i in range(k)]
+    previous = list(first)
+    for breakpoint in sorted(knots):
+        if breakpoint <= _THRESHOLD_TOL or breakpoint >= 1 - _THRESHOLD_TOL:
+            continue
+        right_values = leave_one_out_at(breakpoint + _RIGHT_LIMIT_EPS)
+        for i in range(k):
+            jump = right_values[i] - previous[i]
+            if abs(jump) > _BREAKPOINT_MERGE_TOL:
+                weight_lists[i].append((breakpoint, jump))
+            previous[i] = right_values[i]
+    return weight_lists
+
+
 def leaf_beta_sensitivity(outside_option, control_node, discount_factor, control_data):
     """d profile / d beta for a control, evaluated at one outside-option value,
     via the downward failure-count recursion."""
@@ -438,6 +497,101 @@ def compute_gradient(tree, discount_factors, discount_rate, forward_cache):
 
 
 # =========================================================================
+# NATIVE n-ary fold + backward pass (no to_binary_tree).
+#
+# Produces bit-identical results to the binary fold (series and parallel are
+# associative; parallel is also commutative), but folds each node's >= 2
+# children in one shot rather than through a right-fold of binary nodes.
+# =========================================================================
+_SeriesDataNary = namedtuple("_SeriesDataNary", ["profile", "child_profiles", "suffix_profiles"])
+_ParallelDataNary = namedtuple("_ParallelDataNary", ["profile", "child_profiles"])
+
+
+def compute_profiles_nary(node, discount_factors, forward_cache):
+    """Native n-ary forward fold; records per-node data into forward_cache."""
+    if isinstance(node, ControlNode):
+        profile, profiles_by_count, thresholds = control_profile(
+            discount_factors[node.name], node.success_probs, node.lockout)
+        forward_cache[id(node)] = _ControlData(profile, profiles_by_count, thresholds)
+        return profile
+
+    child_profiles = [compute_profiles_nary(c, discount_factors, forward_cache)
+                      for c in node.children]
+
+    if isinstance(node, SeriesNode):
+        # suffix_profiles[i] = series composite of children i .. k-1 (order matters).
+        k = len(child_profiles)
+        suffix_profiles = [None] * k
+        suffix_profiles[k - 1] = child_profiles[k - 1]
+        for i in range(k - 2, -1, -1):
+            suffix_profiles[i] = series_profile(child_profiles[i], suffix_profiles[i + 1])
+        profile = suffix_profiles[0]
+        forward_cache[id(node)] = _SeriesDataNary(profile, child_profiles, suffix_profiles)
+    else:  # ParallelNode
+        profile = parallel_profile_nary(child_profiles)
+        forward_cache[id(node)] = _ParallelDataNary(profile, child_profiles)
+    return profile
+
+
+def compute_gradient_nary(tree, discount_factors, discount_rate, forward_cache):
+    """Native n-ary backward pass returning {control_name: d V* / d allocation}."""
+    gradient = {}
+
+    def propagate(node, weight_list):
+        node_data = forward_cache[id(node)]
+        if isinstance(node, ControlNode):
+            discount_factor = discount_factors[node.name]
+            beta_sensitivity = sum(
+                weight * leaf_beta_sensitivity(point, node, discount_factor, node_data)
+                for point, weight in weight_list)
+            gradient[node.name] = -discount_rate * discount_factor * beta_sensitivity
+            return
+
+        if isinstance(node, ParallelNode):
+            child_profiles = node_data.child_profiles
+            cumulative = cumulative_weight(weight_list)
+            query_points = {point for point, _ in weight_list}
+            all_breakpoints = set()
+            for p in child_profiles:
+                all_breakpoints |= set(p.breakpoints)
+            knots = all_breakpoints | query_points
+            # Child i is modulated by the LEAVE-ONE-OUT product of the other
+            # branches' slopes (the binary case is the k = 2 instance). All k
+            # leave-one-out products are formed together in O(k) per knot.
+            weight_lists = _leave_one_out_weight_lists(child_profiles, cumulative, knots)
+            for child, child_weights in zip(node.children, weight_lists):
+                propagate(child, child_weights)
+        else:  # SeriesNode: peel children left (upstream) to right (downstream)
+            child_profiles = node_data.child_profiles
+            suffix_profiles = node_data.suffix_profiles
+            k = len(child_profiles)
+            weights = weight_list
+            for i in range(k - 1):
+                upstream_profile = child_profiles[i]
+                downstream_profile = suffix_profiles[i + 1]
+
+                def relocate(point, downstream=downstream_profile):
+                    downstream_value = downstream(point)
+                    return (point / downstream_value
+                            if downstream_value > _ZERO_DIVISION_GUARD else 0.0)
+
+                upstream_weights = [
+                    (relocate(point), weight * downstream_profile(point))
+                    for point, weight in weights]
+                downstream_weights = [
+                    (point, weight * (upstream_profile(relocate(point))
+                                      - relocate(point)
+                                      * upstream_profile.right_slope(relocate(point))))
+                    for point, weight in weights]
+                propagate(node.children[i], upstream_weights)
+                weights = downstream_weights          # feed the suffix composite next
+            propagate(node.children[k - 1], weights)  # last child = suffix_profiles[k-1]
+
+    propagate(tree, [(0.0, 1.0)])
+    return gradient
+
+
+# =========================================================================
 # Independent reference: brute-force MDP value (exponential state space;
 # usable as a check on small trees only).
 # =========================================================================
@@ -449,21 +603,24 @@ def brute_force_value(tree, discount_factors):
     def is_cleared(node, state):
         if isinstance(node, ControlNode):
             return state[node.name] == "passed"
-        left, right = node.children
         if isinstance(node, SeriesNode):
-            return is_cleared(left, state) and is_cleared(right, state)
-        return is_cleared(left, state) or is_cleared(right, state)
+            return all(is_cleared(c, state) for c in node.children)
+        return any(is_cleared(c, state) for c in node.children)
 
     def attackable_controls(node, state):
         if isinstance(node, ControlNode):
             return [node.name] if isinstance(state[node.name], int) else []
-        left, right = node.children
         if isinstance(node, SeriesNode):
-            return (attackable_controls(left, state) if not is_cleared(left, state)
-                    else attackable_controls(right, state))
-        if is_cleared(left, state) or is_cleared(right, state):
+            for child in node.children:              # attack the first uncleared child
+                if not is_cleared(child, state):
+                    return attackable_controls(child, state)
             return []
-        return attackable_controls(left, state) + attackable_controls(right, state)
+        if any(is_cleared(c, state) for c in node.children):
+            return []                                # a branch already won -> done
+        result = []
+        for child in node.children:
+            result += attackable_controls(child, state)
+        return result
 
     @lru_cache(maxsize=None)
     def value(state_items):
@@ -493,18 +650,26 @@ def brute_force_value(tree, discount_factors):
 # =========================================================================
 # Public API
 # =========================================================================
-def _value_and_raw_gradient(binary_tree, names, allocation, discount_rate):
-    """Forward fold + one backward pass at the given allocation (no tie handling)."""
+def _value_and_raw_gradient(work_tree, names, allocation, discount_rate, native=False):
+    """Forward fold + one backward pass at the given allocation (no tie handling).
+
+    native=False -> binary fold (work_tree must be a binary tree);
+    native=True  -> n-ary fold directly on the original tree."""
     discount_factors = {name: math.exp(-discount_rate * allocation[name]) for name in names}
     forward_cache = {}
-    root_profile = compute_profiles(binary_tree, discount_factors, forward_cache)
-    gradient = compute_gradient(binary_tree, discount_factors, discount_rate, forward_cache)
+    if native:
+        root_profile = compute_profiles_nary(work_tree, discount_factors, forward_cache)
+        gradient = compute_gradient_nary(work_tree, discount_factors, discount_rate, forward_cache)
+    else:
+        root_profile = compute_profiles(work_tree, discount_factors, forward_cache)
+        gradient = compute_gradient(work_tree, discount_factors, discount_rate, forward_cache)
     return root_profile(0.0), gradient
 
 
 def value_and_gradient(tree, allocation=None, discount_rate=1.0,
                        verify=False, finite_diff_step=1e-6,
-                       break_ties=True, tie_eps=1e-7, tie_tol=1e-4):
+                       break_ties=True, tie_eps=1e-7, tie_tol=1e-4,
+                       native=True):
     """
     Compute the game value V* and the gradient {control_name: d V* / d allocation}
     for an arbitrary series-parallel tree.
@@ -526,8 +691,10 @@ def value_and_gradient(tree, allocation=None, discount_rate=1.0,
 
     Returns (value, gradient).
     """
-    binary_tree = to_binary_tree(tree)
-    controls = collect_controls(binary_tree)
+    # native=True folds the original n-ary tree directly; otherwise reduce to
+    # binary first. Both produce identical values/gradients (associativity).
+    work_tree = tree if native else to_binary_tree(tree)
+    controls = collect_controls(work_tree)
     names = [c.name for c in controls]
     if len(set(names)) != len(names):
         raise ValueError(f"duplicate control names: {names}")
@@ -539,7 +706,8 @@ def value_and_gradient(tree, allocation=None, discount_rate=1.0,
     if discount_rate <= 0:
         raise ValueError("discount_rate must be > 0")
 
-    value, gradient = _value_and_raw_gradient(binary_tree, names, allocation, discount_rate)
+    value, gradient = _value_and_raw_gradient(
+        work_tree, names, allocation, discount_rate, native=native)
 
     if break_ties:
         # Break ties consistently with a fixed generic direction (distinct offsets):
@@ -548,14 +716,14 @@ def value_and_gradient(tree, allocation=None, discount_rate=1.0,
         offsets = {name: (i + 1) for i, name in enumerate(sorted(names))}
         perturbed = {name: allocation[name] + tie_eps * offsets[name] for name in names}
         _, perturbed_gradient = _value_and_raw_gradient(
-            binary_tree, names, perturbed, discount_rate)
+            work_tree, names, perturbed, discount_rate, native=native)
         at_kink = any(abs(perturbed_gradient[name] - gradient[name]) > tie_tol for name in names)
         if at_kink:
             gradient = perturbed_gradient            # a valid vertex subgradient
 
     if verify:
         reference_factors = {name: math.exp(-discount_rate * allocation[name]) for name in names}
-        reference_value = brute_force_value(binary_tree, reference_factors)
+        reference_value = brute_force_value(work_tree, reference_factors)
         print(f"[verify] V*: fold={value:.10f}  brute-MDP={reference_value:.10f}  "
               f"|diff|={abs(value - reference_value):.2e}")
         worst_discrepancy = 0.0
@@ -564,8 +732,8 @@ def value_and_gradient(tree, allocation=None, discount_rate=1.0,
             bumped_down = dict(allocation); bumped_down[name] -= finite_diff_step
             factors_up = {n: math.exp(-discount_rate * bumped_up[n]) for n in names}
             factors_down = {n: math.exp(-discount_rate * bumped_down[n]) for n in names}
-            finite_diff = (brute_force_value(binary_tree, factors_up)
-                           - brute_force_value(binary_tree, factors_down)) / (2 * finite_diff_step)
+            finite_diff = (brute_force_value(work_tree, factors_up)
+                           - brute_force_value(work_tree, factors_down)) / (2 * finite_diff_step)
             discrepancy = abs(gradient[name] - finite_diff)
             worst_discrepancy = max(worst_discrepancy, discrepancy)
             print(f"[verify]   dV*/d allocation[{name}]: "
