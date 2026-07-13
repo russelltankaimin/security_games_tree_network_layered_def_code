@@ -1,0 +1,731 @@
+\documentclass{article}
+\usepackage{booktabs}
+
+\begin{document}
+In summary (exact-gradient runtimes averaged over batch sizes within each $\lambda$, since the exact computation is deterministic at a fixed $\lambda$):
+\begin{itemize}
+    \item Synthetic graphs: Exact gradient computation is faster in 283 / 393 instances
+    \item Real World: Exact gradient computation is faster in 102/130 instances
+\end{itemize}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+13 & 46 & \textbf{0.0088} & 0.0694 \\
+14 & 45 & \textbf{44.4460} & 241.3199 \\
+13 & 31 & \textbf{42.1599} & 201.0217 \\
+12 & 43 & \textbf{545.4828} & 1056.9885 \\
+14 & 47 & \textbf{485.4080} & 1211.8584 \\
+15 & 39 & \textbf{0.1220} & 1.1935 \\
+14 & 46 & \textbf{23.0678} & 149.6792 \\
+12 & 31 & \textbf{0.6009} & 5.7267 \\
+14 & 49 & \textbf{40.6903} & 256.3712 \\
+10 & 23 & \textbf{0.2921} & 1.8812 \\
+12 & 38 & \textbf{487.9062} & 1137.2944 \\
+11 & 36 & \textbf{29.5267} & 109.4806 \\
+14 & 45 & \textbf{0.1560} & 1.4986 \\
+12 & 35 & \textbf{135.5132} & 371.6641 \\
+14 & 34 & \textbf{0.0942} & 0.9101 \\
+14 & 45 & \textbf{0.2633} & 1.8918 \\
+10 & 27 & \textbf{16.1116} & 64.7543 \\
+12 & 37 & \textbf{23.2914} & 103.2700 \\
+10 & 20 & 271.4261 & \textbf{228.7789} \\
+10 & 32 & \textbf{0.8340} & 7.4297 \\
+10 & 24 & \textbf{211.3748} & 783.2098 \\
+11 & 25 & \textbf{68.7653} & 205.2141 \\
+13 & 42 & \textbf{1.6083} & 11.0751 \\
+14 & 37 & \textbf{0.0216} & 0.1649 \\
+11 & 36 & \textbf{0.0685} & 0.2789 \\
+31 & 129 & \textbf{233.5218} & 1741.0724 \\
+41 & 111 & \textbf{2433.6606} & 7038.0496 \\
+43 & 150 & \textbf{4.1663} & 32.3372 \\
+44 & 144 & \textbf{2390.5055} & 4312.8525 \\
+38 & 148 & \textbf{0.8439} & 5.4195 \\
+44 & 100 & \textbf{44.8758} & 220.9064 \\
+35 & 150 & \textbf{720.9957} & 3272.8092 \\
+43 & 102 & \textbf{1674.4087} & 4322.9017 \\
+37 & 122 & \textbf{1680.6559} & 3746.2945 \\
+32 & 117 & \textbf{1687.4130} & 3771.0516 \\
+42 & 133 & \textbf{6.7141} & 12.7010 \\
+31 & 113 & \textbf{89.8970} & 867.2519 \\
+41 & 116 & \textbf{101.5480} & 827.0905 \\
+42 & 126 & \textbf{5.7566} & 58.2261 \\
+13 & 42 & \textbf{0.0916} & 0.4844 \\
+14 & 45 & \textbf{114.5595} & 391.6809 \\
+12 & 30 & \textbf{5.9375} & 26.4280 \\
+14 & 36 & \textbf{10.0967} & 89.5248 \\
+15 & 45 & \textbf{68.4338} & 363.7539 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{b100r10}: Synthetic Graphs, Stochastic Gradient batch size 100 and $\lambda$ = 10.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+13 & 46 & \textbf{0.9549} & 4.2761 \\
+14 & 45 & \textbf{178.6436} & 871.0389 \\
+13 & 31 & \textbf{125.6740} & 798.0190 \\
+12 & 43 & \textbf{205.9928} & 326.0370 \\
+14 & 47 & \textbf{256.2797} & 434.1494 \\
+15 & 39 & \textbf{0.8176} & 30.1772 \\
+14 & 46 & \textbf{93.5503} & 1066.8628 \\
+12 & 31 & \textbf{1.7129} & 136.7383 \\
+14 & 49 & \textbf{103.6890} & 972.3336 \\
+10 & 23 & \textbf{1.3192} & 9.0430 \\
+12 & 38 & \textbf{125.0169} & 161.5892 \\
+11 & 36 & \textbf{157.0018} & 439.4341 \\
+14 & 45 & \textbf{1.5113} & 10.7799 \\
+12 & 35 & \textbf{86.3343} & 161.6054 \\
+14 & 34 & \textbf{0.7926} & 6.7784 \\
+14 & 45 & \textbf{5.1358} & 147.0397 \\
+10 & 27 & \textbf{94.9863} & 166.8360 \\
+12 & 37 & \textbf{112.0003} & 482.3129 \\
+10 & 20 & \textbf{60.9895} & 94.6075 \\
+10 & 32 & \textbf{0.5878} & 11.4358 \\
+10 & 24 & \textbf{96.7380} & 288.4143 \\
+11 & 25 & \textbf{88.3228} & 196.7621 \\
+13 & 42 & \textbf{6.2931} & 312.0274 \\
+14 & 37 & \textbf{0.6749} & 9.1164 \\
+11 & 36 & \textbf{1.6711} & 2.0920 \\
+31 & 129 & \textbf{351.0045} & 2228.1962 \\
+41 & 111 & \textbf{668.9051} & 2869.0076 \\
+43 & 150 & \textbf{53.0614} & 1523.2430 \\
+44 & 144 & \textbf{893.2753} & 1080.5406 \\
+38 & 148 & \textbf{4.7405} & 52.2642 \\
+44 & 100 & \textbf{247.9868} & 1172.7295 \\
+35 & 150 & \textbf{1164.5916} & 4028.0331 \\
+43 & 102 & \textbf{607.2539} & 1307.4348 \\
+37 & 122 & \textbf{945.3229} & 2111.6575 \\
+32 & 117 & \textbf{678.1526} & 1518.6261 \\
+42 & 133 & \textbf{3.5295} & 16.6700 \\
+31 & 113 & \textbf{546.4810} & 4357.5130 \\
+41 & 116 & \textbf{559.2875} & 3689.0074 \\
+42 & 126 & \textbf{12.7121} & 531.3117 \\
+13 & 42 & \textbf{2.7089} & 63.8956 \\
+14 & 45 & \textbf{180.0861} & 830.5098 \\
+12 & 30 & \textbf{36.4972} & 318.6231 \\
+14 & 36 & \textbf{51.1076} & 316.8599 \\
+15 & 45 & \textbf{165.5828} & 828.1225 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{b100r1}: Synthetic Graphs, Stochastic Gradient batch size 100 and $\lambda$ = 1.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+13 & 46 & \textbf{0.1023} & 0.8392 \\
+14 & 45 & \textbf{354.5699} & 1641.1221 \\
+13 & 31 & \textbf{185.1364} & 900.1616 \\
+12 & 43 & \textbf{694.1025} & 884.7392 \\
+14 & 47 & \textbf{707.9392} & 1194.4453 \\
+15 & 39 & \textbf{0.4094} & 3.5626 \\
+14 & 46 & \textbf{72.5250} & 401.6646 \\
+12 & 31 & \textbf{1.2968} & 11.6059 \\
+14 & 49 & \textbf{68.9197} & 471.6338 \\
+10 & 23 & \textbf{0.6483} & 3.2819 \\
+12 & 38 & \textbf{301.4598} & 363.5501 \\
+11 & 36 & \textbf{104.5853} & 271.7267 \\
+14 & 45 & \textbf{0.6416} & 4.8448 \\
+12 & 35 & 276.5491 & \textbf{252.6280} \\
+14 & 34 & \textbf{0.3989} & 3.0123 \\
+14 & 45 & \textbf{0.9738} & 6.3669 \\
+10 & 27 & \textbf{53.4098} & 236.2152 \\
+12 & 37 & \textbf{87.0934} & 295.9149 \\
+10 & 20 & \textbf{130.9733} & 131.4328 \\
+10 & 32 & \textbf{0.6181} & 6.2589 \\
+10 & 24 & \textbf{235.0279} & 713.3717 \\
+11 & 25 & \textbf{145.7430} & 352.5649 \\
+13 & 42 & \textbf{2.6063} & 16.8114 \\
+14 & 37 & \textbf{0.1123} & 0.7440 \\
+11 & 36 & \textbf{0.2614} & 0.9206 \\
+31 & 129 & \textbf{1117.7952} & 5489.2598 \\
+41 & 111 & \textbf{1538.5943} & 6273.1570 \\
+43 & 150 & \textbf{9.1274} & 72.3981 \\
+44 & 144 & \textbf{1755.8384} & 2520.9969 \\
+38 & 148 & \textbf{2.6880} & 17.7230 \\
+44 & 100 & \textbf{192.1840} & 1176.5468 \\
+35 & 150 & \textbf{3142.2716} & 11702.4903 \\
+43 & 102 & \textbf{1217.0298} & 3019.4415 \\
+37 & 122 & \textbf{2274.5717} & 5202.7420 \\
+32 & 117 & \textbf{1722.4135} & 3827.8324 \\
+42 & 133 & \textbf{6.1411} & 10.9578 \\
+31 & 113 & \textbf{248.5544} & 2120.2829 \\
+41 & 116 & \textbf{423.9496} & 2809.0371 \\
+42 & 126 & \textbf{7.0326} & 70.9222 \\
+13 & 42 & \textbf{0.5178} & 2.8742 \\
+14 & 45 & \textbf{461.0413} & 1986.8710 \\
+12 & 30 & \textbf{14.4022} & 79.3400 \\
+14 & 36 & \textbf{15.2821} & 106.2436 \\
+15 & 45 & \textbf{426.6542} & 2034.1553 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{b100r5}: Synthetic Graphs, Stochastic Gradient batch size 100 and $\lambda$ = 5.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+13 & 46 & \textbf{0.0088} & 0.0228 \\
+14 & 45 & \textbf{44.4460} & 52.5206 \\
+13 & 31 & \textbf{42.1599} & 52.5002 \\
+12 & 43 & 545.4828 & \textbf{227.7780} \\
+14 & 47 & 485.4080 & \textbf{254.2126} \\
+15 & 39 & \textbf{0.1220} & 0.2127 \\
+14 & 46 & 23.0678 & \textbf{19.7837} \\
+12 & 31 & \textbf{0.6009} & 1.0368 \\
+14 & 49 & \textbf{40.6903} & 46.2252 \\
+10 & 23 & \textbf{0.2921} & 0.3947 \\
+12 & 38 & 487.9062 & \textbf{260.2377} \\
+11 & 36 & 29.5267 & \textbf{18.5498} \\
+14 & 45 & \textbf{0.1560} & 0.3260 \\
+12 & 35 & 135.5132 & \textbf{59.3958} \\
+14 & 34 & \textbf{0.0942} & 0.2155 \\
+14 & 45 & \textbf{0.2633} & 0.3879 \\
+10 & 27 & \textbf{16.1116} & 19.5652 \\
+12 & 37 & 23.2914 & \textbf{13.7924} \\
+10 & 20 & 271.4261 & \textbf{30.7630} \\
+10 & 32 & \textbf{0.8340} & 2.6552 \\
+10 & 24 & 211.3748 & \textbf{136.4592} \\
+11 & 25 & 68.7653 & \textbf{45.9355} \\
+13 & 42 & \textbf{1.6083} & 2.6282 \\
+14 & 37 & \textbf{0.0216} & 0.0308 \\
+11 & 36 & \textbf{0.0685} & 0.1859 \\
+31 & 129 & \textbf{233.5218} & 386.7654 \\
+41 & 111 & 2433.6606 & \textbf{1324.9374} \\
+43 & 150 & \textbf{4.1663} & 8.6078 \\
+44 & 144 & 2390.5055 & \textbf{906.7666} \\
+38 & 148 & \textbf{0.8439} & 2.0971 \\
+44 & 100 & \textbf{44.8758} & 54.4205 \\
+35 & 150 & \textbf{720.9957} & 941.4462 \\
+43 & 102 & 1674.4087 & \textbf{1031.3483} \\
+37 & 122 & 1680.6559 & \textbf{941.8842} \\
+32 & 117 & 1687.4130 & \textbf{993.7273} \\
+42 & 133 & 6.7141 & \textbf{3.0424} \\
+31 & 113 & \textbf{89.8970} & 173.7266 \\
+41 & 116 & \textbf{101.5480} & 131.7014 \\
+42 & 126 & \textbf{5.7566} & 15.1848 \\
+13 & 42 & \textbf{0.0916} & 0.1536 \\
+14 & 45 & \textbf{114.5595} & 124.4798 \\
+12 & 30 & 5.9375 & \textbf{5.5687} \\
+14 & 36 & \textbf{10.0967} & 13.7211 \\
+15 & 45 & \textbf{68.4338} & 91.8122 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{b10r10}: Synthetic Graphs, Stochastic Gradient batch size 10 and $\lambda$ = 10.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+13 & 46 & \textbf{0.9549} & 2.2296 \\
+14 & 45 & \textbf{178.6436} & 183.6245 \\
+13 & 31 & \textbf{125.6740} & 163.8555 \\
+12 & 43 & 205.9928 & \textbf{86.0936} \\
+14 & 47 & 256.2797 & \textbf{107.1470} \\
+15 & 39 & \textbf{0.8176} & 10.0347 \\
+14 & 46 & \textbf{93.5503} & 215.4718 \\
+12 & 31 & \textbf{1.7129} & 29.8681 \\
+14 & 49 & \textbf{103.6890} & 222.6802 \\
+10 & 23 & \textbf{1.3192} & 2.9048 \\
+12 & 38 & 125.0169 & \textbf{40.5422} \\
+11 & 36 & 157.0018 & \textbf{91.2523} \\
+14 & 45 & \textbf{1.5113} & 3.0009 \\
+12 & 35 & 86.3343 & \textbf{31.6306} \\
+14 & 34 & \textbf{0.7926} & 3.1328 \\
+14 & 45 & \textbf{5.1358} & 40.8854 \\
+10 & 27 & 94.9863 & \textbf{37.0213} \\
+12 & 37 & 112.0003 & \textbf{101.3548} \\
+10 & 20 & 60.9895 & \textbf{18.5039} \\
+10 & 32 & \textbf{0.5878} & 5.6107 \\
+10 & 24 & 96.7380 & \textbf{60.9895} \\
+11 & 25 & 88.3228 & \textbf{36.0904} \\
+13 & 42 & \textbf{6.2931} & 79.4084 \\
+14 & 37 & \textbf{0.6749} & 2.8630 \\
+11 & 36 & 1.6711 & \textbf{1.1237} \\
+31 & 129 & \textbf{351.0045} & 373.9986 \\
+41 & 111 & 668.9051 & \textbf{422.7850} \\
+43 & 150 & \textbf{53.0614} & 342.9737 \\
+44 & 144 & 893.2753 & \textbf{205.6665} \\
+38 & 148 & \textbf{4.7405} & 23.1792 \\
+44 & 100 & 247.9868 & \textbf{193.1133} \\
+35 & 150 & 1164.5916 & \textbf{1040.8855} \\
+43 & 102 & 607.2539 & \textbf{253.0648} \\
+37 & 122 & 945.3229 & \textbf{465.3311} \\
+32 & 117 & 678.1526 & \textbf{380.9200} \\
+42 & 133 & \textbf{3.5295} & 7.8680 \\
+31 & 113 & \textbf{546.4810} & 1075.1591 \\
+41 & 116 & 559.2875 & \textbf{505.9372} \\
+42 & 126 & \textbf{12.7121} & 110.7546 \\
+13 & 42 & \textbf{2.7089} & 24.9795 \\
+14 & 45 & \textbf{180.0861} & 201.9820 \\
+12 & 30 & \textbf{36.4972} & 76.7929 \\
+14 & 36 & \textbf{51.1076} & 62.2329 \\
+15 & 45 & \textbf{165.5828} & 195.0763 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{b10r1}: Synthetic Graphs, Stochastic Gradient batch size 10 and $\lambda$ = 1.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+13 & 46 & \textbf{0.1023} & 0.2368 \\
+14 & 45 & \textbf{354.5699} & 525.2081 \\
+13 & 31 & 185.1364 & \textbf{182.4342} \\
+12 & 43 & 694.1025 & \textbf{247.8936} \\
+14 & 47 & 707.9392 & \textbf{298.3004} \\
+15 & 39 & \textbf{0.4094} & 0.7827 \\
+14 & 46 & \textbf{72.5250} & 94.3460 \\
+12 & 31 & \textbf{1.2968} & 2.3397 \\
+14 & 49 & \textbf{68.9197} & 124.9926 \\
+10 & 23 & \textbf{0.6483} & 0.8335 \\
+12 & 38 & 301.4598 & \textbf{90.1891} \\
+11 & 36 & 104.5853 & \textbf{63.0293} \\
+14 & 45 & \textbf{0.6416} & 1.1765 \\
+12 & 35 & 276.5491 & \textbf{64.3076} \\
+14 & 34 & \textbf{0.3989} & 0.7850 \\
+14 & 45 & \textbf{0.9738} & 1.2265 \\
+10 & 27 & \textbf{53.4098} & 73.9971 \\
+12 & 37 & 87.0934 & \textbf{61.7295} \\
+10 & 20 & 130.9733 & \textbf{31.9756} \\
+10 & 32 & \textbf{0.6181} & 0.9483 \\
+10 & 24 & 235.0279 & \textbf{150.2524} \\
+11 & 25 & 145.7430 & \textbf{90.4216} \\
+13 & 42 & \textbf{2.6063} & 4.0362 \\
+14 & 37 & \textbf{0.1123} & 0.1635 \\
+11 & 36 & \textbf{0.2614} & 0.2638 \\
+31 & 129 & \textbf{1117.7952} & 1696.1074 \\
+41 & 111 & 1538.5943 & \textbf{1114.0827} \\
+43 & 150 & \textbf{9.1274} & 14.4949 \\
+44 & 144 & 1755.8384 & \textbf{485.2080} \\
+38 & 148 & \textbf{2.6880} & 5.7957 \\
+44 & 100 & \textbf{192.1840} & 229.1724 \\
+35 & 150 & 3142.2716 & \textbf{2757.8474} \\
+43 & 102 & 1217.0298 & \textbf{681.2177} \\
+37 & 122 & 2274.5717 & \textbf{1244.0165} \\
+32 & 117 & 1722.4135 & \textbf{991.1848} \\
+42 & 133 & 6.1411 & \textbf{2.4617} \\
+31 & 113 & \textbf{248.5544} & 561.0350 \\
+41 & 116 & \textbf{423.9496} & 425.3745 \\
+42 & 126 & \textbf{7.0326} & 14.1865 \\
+13 & 42 & \textbf{0.5178} & 0.5599 \\
+14 & 45 & \textbf{461.0413} & 477.5172 \\
+12 & 30 & \textbf{14.4022} & 21.4549 \\
+14 & 36 & \textbf{15.2821} & 20.8598 \\
+15 & 45 & \textbf{426.6542} & 566.6132 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{b10r5}: Synthetic Graphs, Stochastic Gradient batch size 10 and $\lambda$ = 5.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+13 & 46 & \textbf{0.0088} & 0.0370 \\
+14 & 45 & \textbf{44.4460} & 88.1054 \\
+13 & 31 & \textbf{42.1599} & 77.0082 \\
+12 & 43 & 545.4828 & \textbf{262.6790} \\
+14 & 47 & 485.4080 & \textbf{263.2416} \\
+15 & 39 & \textbf{0.1220} & 0.4285 \\
+14 & 46 & \textbf{23.0678} & 27.4508 \\
+12 & 31 & \textbf{0.6009} & 0.9573 \\
+14 & 49 & 40.6903 & \textbf{33.8852} \\
+10 & 23 & \textbf{0.2921} & 0.3310 \\
+12 & 38 & 487.9062 & \textbf{249.7775} \\
+11 & 36 & 29.5267 & \textbf{13.0993} \\
+14 & 45 & \textbf{0.1560} & 0.4065 \\
+12 & 35 & 135.5132 & \textbf{52.1343} \\
+14 & 34 & \textbf{0.0942} & 0.2708 \\
+14 & 45 & \textbf{0.2633} & 0.5059 \\
+10 & 27 & \textbf{16.1116} & 26.1734 \\
+12 & 37 & 23.2914 & \textbf{10.0153} \\
+10 & 20 & 271.4261 & \textbf{35.3557} \\
+10 & 32 & \textbf{0.8340} & 1.5077 \\
+10 & 24 & 211.3748 & \textbf{132.8822} \\
+11 & 25 & \textbf{68.7653} & 89.1224 \\
+13 & 42 & \textbf{1.6083} & 2.0492 \\
+14 & 37 & \textbf{0.0216} & 0.3054 \\
+11 & 36 & \textbf{0.0685} & 0.1152 \\
+31 & 129 & \textbf{233.5218} & 557.4471 \\
+41 & 111 & 2433.6606 & \textbf{1122.3289} \\
+43 & 150 & \textbf{4.1663} & 10.0267 \\
+44 & 144 & 2390.5055 & \textbf{673.4813} \\
+44 & 100 & \textbf{44.8758} & 70.5739 \\
+35 & 150 & \textbf{720.9957} & 846.1921 \\
+43 & 102 & 1674.4087 & \textbf{869.0908} \\
+37 & 122 & 1680.6559 & \textbf{912.9333} \\
+32 & 117 & 1687.4130 & \textbf{924.9595} \\
+42 & 133 & \textbf{6.7141} & 9.7685 \\
+31 & 113 & \textbf{89.8970} & 177.6732 \\
+41 & 116 & 101.5480 & \textbf{70.8127} \\
+42 & 126 & \textbf{5.7566} & 15.3016 \\
+13 & 42 & \textbf{0.0916} & 0.4666 \\
+14 & 45 & \textbf{114.5595} & 143.6641 \\
+12 & 30 & \textbf{5.9375} & 21.2477 \\
+14 & 36 & \textbf{10.0967} & 17.2121 \\
+15 & 45 & \textbf{68.4338} & 93.3921 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{b1r10}: Synthetic Graphs, Stochastic Gradient batch size 1 and $\lambda$ = 10.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+13 & 46 & \textbf{0.9549} & 13.4940 \\
+14 & 45 & 178.6436 & \textbf{123.3376} \\
+13 & 31 & 125.6740 & \textbf{120.8832} \\
+12 & 43 & 205.9928 & \textbf{71.5866} \\
+14 & 47 & 256.2797 & \textbf{82.6191} \\
+15 & 39 & \textbf{0.8176} & 32.4656 \\
+14 & 46 & \textbf{93.5503} & 220.5106 \\
+12 & 31 & \textbf{1.7129} & 48.5441 \\
+14 & 49 & \textbf{103.6890} & 210.2716 \\
+10 & 23 & \textbf{1.3192} & 6.9957 \\
+12 & 38 & 125.0169 & \textbf{24.9309} \\
+11 & 36 & 157.0018 & \textbf{46.6749} \\
+14 & 45 & \textbf{1.5113} & 13.2754 \\
+12 & 35 & 86.3343 & \textbf{19.5769} \\
+14 & 34 & \textbf{0.7926} & 5.2875 \\
+14 & 45 & \textbf{5.1358} & 85.3882 \\
+10 & 27 & 94.9863 & \textbf{37.5499} \\
+12 & 37 & 112.0003 & \textbf{77.7298} \\
+10 & 20 & 60.9895 & \textbf{10.6755} \\
+10 & 32 & \textbf{0.5878} & 23.4989 \\
+10 & 24 & 96.7380 & \textbf{40.3013} \\
+11 & 25 & 88.3228 & \textbf{22.8682} \\
+13 & 42 & \textbf{6.2931} & 139.0233 \\
+14 & 37 & \textbf{0.6749} & 11.7908 \\
+11 & 36 & \textbf{1.6711} & 4.1271 \\
+31 & 129 & 351.0045 & \textbf{233.6801} \\
+41 & 111 & 668.9051 & \textbf{173.9727} \\
+43 & 150 & \textbf{53.0614} & 544.3497 \\
+44 & 144 & 893.2753 & \textbf{115.4722} \\
+44 & 100 & 247.9868 & \textbf{131.4772} \\
+35 & 150 & 1164.5916 & \textbf{758.1106} \\
+43 & 102 & 607.2539 & \textbf{138.8699} \\
+37 & 122 & 945.3229 & \textbf{327.8342} \\
+32 & 117 & 678.1526 & \textbf{291.6078} \\
+42 & 133 & \textbf{3.5295} & 27.3486 \\
+31 & 113 & \textbf{546.4810} & 888.0350 \\
+41 & 116 & 559.2875 & \textbf{190.8163} \\
+42 & 126 & \textbf{12.7121} & 218.4460 \\
+13 & 42 & \textbf{2.7089} & 66.5648 \\
+14 & 45 & 180.0861 & \textbf{142.5755} \\
+12 & 30 & \textbf{36.4972} & 75.8446 \\
+14 & 36 & \textbf{51.1076} & 59.8102 \\
+15 & 45 & 165.5828 & \textbf{151.9188} \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{b1r1}: Synthetic Graphs, Stochastic Gradient batch size 1 and $\lambda$ = 1.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+13 & 46 & \textbf{0.1023} & 0.3153 \\
+14 & 45 & \textbf{354.5699} & 604.2781 \\
+13 & 31 & \textbf{185.1364} & 283.3527 \\
+12 & 43 & 694.1025 & \textbf{217.6666} \\
+14 & 47 & 707.9392 & \textbf{252.4971} \\
+15 & 39 & \textbf{0.4094} & 1.3192 \\
+14 & 46 & \textbf{72.5250} & 149.1412 \\
+12 & 31 & \textbf{1.2968} & 2.2735 \\
+14 & 49 & \textbf{68.9197} & 191.9626 \\
+10 & 23 & \textbf{0.6483} & 0.6844 \\
+12 & 38 & 301.4598 & \textbf{74.7724} \\
+11 & 36 & 104.5853 & \textbf{57.7631} \\
+14 & 45 & \textbf{0.6416} & 1.3083 \\
+12 & 35 & 276.5491 & \textbf{84.8727} \\
+14 & 34 & \textbf{0.3989} & 1.0215 \\
+14 & 45 & \textbf{0.9738} & 1.4325 \\
+10 & 27 & \textbf{53.4098} & 132.0565 \\
+12 & 37 & 87.0934 & \textbf{57.2516} \\
+10 & 20 & 130.9733 & \textbf{19.3253} \\
+10 & 32 & \textbf{0.6181} & 1.5503 \\
+10 & 24 & 235.0279 & \textbf{110.6647} \\
+11 & 25 & 145.7430 & \textbf{92.2433} \\
+13 & 42 & \textbf{2.6063} & 3.2087 \\
+14 & 37 & \textbf{0.1123} & 0.8989 \\
+11 & 36 & \textbf{0.2614} & 0.4779 \\
+31 & 129 & \textbf{1117.7952} & 2175.0409 \\
+41 & 111 & 1538.5943 & \textbf{645.4962} \\
+43 & 150 & \textbf{9.1274} & 13.6435 \\
+44 & 144 & 1755.8384 & \textbf{339.5674} \\
+44 & 100 & \textbf{192.1840} & 280.0625 \\
+35 & 150 & 3142.2716 & \textbf{2138.8908} \\
+43 & 102 & 1217.0298 & \textbf{522.0475} \\
+37 & 122 & 2274.5717 & \textbf{935.8210} \\
+32 & 117 & 1722.4135 & \textbf{769.7060} \\
+42 & 133 & \textbf{6.1411} & 7.3664 \\
+31 & 113 & \textbf{248.5544} & 620.5357 \\
+41 & 116 & 423.9496 & \textbf{247.7357} \\
+42 & 126 & \textbf{7.0326} & 10.2466 \\
+13 & 42 & \textbf{0.5178} & 1.3744 \\
+14 & 45 & 461.0413 & \textbf{396.8944} \\
+12 & 30 & \textbf{14.4022} & 39.2154 \\
+14 & 36 & \textbf{15.2821} & 26.8748 \\
+15 & 45 & \textbf{426.6542} & 557.9260 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{b1r5}: Synthetic Graphs, Stochastic Gradient batch size 1 and $\lambda$ = 5.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+7 & 26 & \textbf{0.0147} & 0.0822 \\
+8 & 29 & \textbf{0.6292} & 2.4330 \\
+11 & 43 & \textbf{616.8267} & 715.1510 \\
+12 & 37 & \textbf{675.9624} & 1879.7881 \\
+45 & 45 & \textbf{3703.9799} & 81508.6505 \\
+9 & 9 & \textbf{0.0265} & 2.3860 \\
+27 & 27 & \textbf{0.1087} & 16.4539 \\
+22 & 22 & \textbf{10.4673} & 493.5519 \\
+25 & 25 & \textbf{168.6268} & 3419.1799 \\
+10 & 10 & \textbf{0.0552} & 3.6743 \\
+34 & 34 & \textbf{0.0558} & 70.2992 \\
+22 & 22 & \textbf{10.4197} & 496.3230 \\
+23 & 23 & \textbf{0.0430} & 12.4852 \\
+30 & 30 & \textbf{419.2555} & 1780.6692 \\
+16 & 16 & \textbf{0.0999} & 8.3562 \\
+27 & 27 & \textbf{1.8705} & 51.3897 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{rw\_b100r10}: Real World Attack Fault Trees, Stochastic Gradient batch size 100 and $\lambda$ = 10.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+7 & 26 & \textbf{5.8803} & 23.0402 \\
+8 & 29 & \textbf{2.7730} & 30.5841 \\
+11 & 43 & 125.4668 & \textbf{107.0416} \\
+12 & 37 & \textbf{332.8605} & 926.2043 \\
+18 & 18 & \textbf{0.1317} & 7.0788 \\
+45 & 45 & \textbf{1066.3588} & 26779.6683 \\
+9 & 9 & \textbf{0.0100} & 0.5301 \\
+27 & 27 & \textbf{0.0978} & 6.0996 \\
+21 & 21 & \textbf{0.0158} & 0.3162 \\
+22 & 22 & \textbf{39.9480} & 1417.7198 \\
+25 & 25 & \textbf{292.2073} & 6745.9717 \\
+10 & 10 & \textbf{0.0727} & 1.7850 \\
+34 & 34 & \textbf{0.0074} & 2.9408 \\
+22 & 22 & \textbf{39.7312} & 1419.7769 \\
+23 & 23 & \textbf{0.0037} & 2.3465 \\
+30 & 30 & \textbf{180.6040} & 773.5322 \\
+16 & 16 & \textbf{0.0315} & 2.6009 \\
+27 & 27 & \textbf{17.4884} & 324.5141 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{rw\_b100r1}: Real World Attack Fault Trees, Stochastic Gradient batch size 100 and $\lambda$ = 1.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+7 & 26 & \textbf{0.1357} & 0.8065 \\
+8 & 29 & \textbf{1.6368} & 6.7870 \\
+11 & 43 & 319.6526 & \textbf{239.6087} \\
+12 & 37 & \textbf{965.1779} & 2629.6770 \\
+18 & 18 & \textbf{0.1864} & 12.3387 \\
+45 & 45 & \textbf{3038.3133} & 65861.5503 \\
+9 & 9 & \textbf{0.0186} & 1.5158 \\
+27 & 27 & \textbf{0.1617} & 14.9034 \\
+21 & 21 & \textbf{0.0330} & 0.7618 \\
+22 & 22 & \textbf{32.8473} & 1274.5758 \\
+25 & 25 & \textbf{422.4654} & 8716.9510 \\
+10 & 10 & \textbf{0.0882} & 2.9714 \\
+34 & 34 & \textbf{0.0598} & 53.0205 \\
+22 & 22 & \textbf{32.5576} & 1270.5722 \\
+23 & 23 & \textbf{0.0264} & 6.5885 \\
+30 & 30 & \textbf{294.0524} & 1543.7963 \\
+16 & 16 & \textbf{0.0759} & 6.0785 \\
+27 & 27 & \textbf{9.8809} & 186.8037 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{rw\_b100r5}: Real World Attack Fault Trees, Stochastic Gradient batch size 100 and $\lambda$ = 5.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+7 & 26 & \textbf{0.0147} & 0.0397 \\
+8 & 29 & 0.6292 & \textbf{0.5873} \\
+11 & 43 & 616.8267 & \textbf{212.5194} \\
+12 & 37 & 675.9624 & \textbf{406.4657} \\
+18 & 18 & 0.1876 & \textbf{0.0374} \\
+45 & 45 & \textbf{3703.9799} & 11009.4222 \\
+9 & 9 & \textbf{0.0265} & 2.0498 \\
+22 & 22 & \textbf{10.4673} & 310.4006 \\
+25 & 25 & \textbf{168.6268} & 839.3708 \\
+10 & 10 & \textbf{0.0552} & 2.6194 \\
+34 & 34 & \textbf{0.0558} & 121.6930 \\
+22 & 22 & \textbf{10.4197} & 312.4814 \\
+30 & 30 & 419.2555 & \textbf{290.7576} \\
+16 & 16 & \textbf{0.0999} & 6.4575 \\
+27 & 27 & \textbf{1.8705} & 26.5655 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{rw\_b10r10}: Real World Attack Fault Trees, Stochastic Gradient batch size 10 and $\lambda$ = 10.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+7 & 26 & \textbf{5.8803} & 7.5825 \\
+8 & 29 & \textbf{2.7730} & 11.5270 \\
+11 & 43 & 125.4668 & \textbf{24.7880} \\
+12 & 37 & 332.8605 & \textbf{164.7172} \\
+18 & 18 & \textbf{0.1317} & 4.6925 \\
+45 & 45 & \textbf{1066.3588} & 2907.3757 \\
+9 & 9 & \textbf{0.0100} & 0.5257 \\
+22 & 22 & \textbf{39.9480} & 396.3831 \\
+25 & 25 & \textbf{292.2073} & 1108.3690 \\
+10 & 10 & \textbf{0.0727} & 1.3290 \\
+34 & 34 & \textbf{0.0074} & 3.8544 \\
+22 & 22 & \textbf{39.7312} & 395.6448 \\
+30 & 30 & 180.6040 & \textbf{114.8046} \\
+16 & 16 & \textbf{0.0315} & 2.1750 \\
+27 & 27 & \textbf{17.4884} & 90.6086 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{rw\_b10r1}: Real World Attack Fault Trees, Stochastic Gradient batch size 10 and $\lambda$ = 1.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+7 & 26 & \textbf{0.1357} & 0.2904 \\
+8 & 29 & \textbf{1.6368} & 1.7242 \\
+11 & 43 & 319.6526 & \textbf{51.5936} \\
+12 & 37 & 965.1779 & \textbf{501.9794} \\
+18 & 18 & \textbf{0.1864} & 9.6579 \\
+45 & 45 & \textbf{3038.3133} & 7845.5427 \\
+9 & 9 & \textbf{0.0186} & 1.4056 \\
+22 & 22 & \textbf{32.8473} & 548.4252 \\
+25 & 25 & \textbf{422.4654} & 1642.2473 \\
+10 & 10 & \textbf{0.0882} & 2.9707 \\
+34 & 34 & \textbf{0.0598} & 86.5222 \\
+22 & 22 & \textbf{32.5576} & 544.1039 \\
+30 & 30 & 294.0524 & \textbf{198.2266} \\
+16 & 16 & \textbf{0.0759} & 5.8907 \\
+27 & 27 & \textbf{9.8809} & 71.5643 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{rw\_b10r5}: Real World Attack Fault Trees, Stochastic Gradient batch size 10 and $\lambda$ = 5.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+7 & 26 & \textbf{0.0147} & 0.0485 \\
+8 & 29 & 0.6292 & \textbf{0.3450} \\
+11 & 43 & 616.8267 & \textbf{188.7170} \\
+12 & 37 & 675.9624 & \textbf{447.6349} \\
+45 & 45 & 3703.9799 & \textbf{1637.7362} \\
+22 & 22 & \textbf{10.4673} & 332.3074 \\
+25 & 25 & \textbf{168.6268} & 482.2648 \\
+10 & 10 & \textbf{0.0552} & 3.9170 \\
+22 & 22 & \textbf{10.4197} & 330.0916 \\
+30 & 30 & 419.2555 & \textbf{55.1915} \\
+27 & 27 & \textbf{1.8705} & 38.5971 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{rw\_b1r10}: Real World Attack Fault Trees, Stochastic Gradient batch size 1 and $\lambda$ = 10.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+7 & 26 & \textbf{5.8803} & 17.2463 \\
+8 & 29 & \textbf{2.7730} & 28.9509 \\
+11 & 43 & 125.4668 & \textbf{14.7176} \\
+12 & 37 & 332.8605 & \textbf{97.5300} \\
+45 & 45 & 1066.3588 & \textbf{278.6025} \\
+22 & 22 & \textbf{39.9480} & 274.3460 \\
+25 & 25 & 292.2073 & \textbf{194.4363} \\
+10 & 10 & \textbf{0.0727} & 1.8407 \\
+22 & 22 & \textbf{39.7312} & 274.4802 \\
+30 & 30 & 180.6040 & \textbf{20.5790} \\
+27 & 27 & \textbf{17.4884} & 86.4957 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{rw\_b1r1}: Real World Attack Fault Trees, Stochastic Gradient batch size 1 and $\lambda$ = 1.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Number of Controls & Q & Exact Gradient Runtime (s) & Stochastic Gradient Runtime (s) \\
+\midrule
+7 & 26 & \textbf{0.1357} & 0.3232 \\
+8 & 29 & 1.6368 & \textbf{1.1071} \\
+11 & 43 & 319.6526 & \textbf{40.4632} \\
+12 & 37 & 965.1779 & \textbf{378.8832} \\
+45 & 45 & 3038.3133 & \textbf{1005.4348} \\
+22 & 22 & \textbf{32.8473} & 524.2558 \\
+25 & 25 & \textbf{422.4654} & 509.1277 \\
+10 & 10 & \textbf{0.0882} & 5.2655 \\
+22 & 22 & \textbf{32.5576} & 520.5625 \\
+30 & 30 & 294.0524 & \textbf{37.0946} \\
+27 & 27 & \textbf{9.8809} & 93.7315 \\
+\bottomrule
+\end{tabular}
+\caption{Runtimes for \texttt{rw\_b1r5}: Real World Attack Fault Trees, Stochastic Gradient batch size 1 and $\lambda$ = 5.}
+\end{table}
+\end{document}
