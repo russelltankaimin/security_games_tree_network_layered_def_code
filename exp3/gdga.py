@@ -71,7 +71,7 @@ for _pkg in ("spn_attacker", "spn_defender"):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-from sp_attacker import (  # noqa: E402
+from spn_attacker.sp_attacker import (  # noqa: E402
     Control as AttackerControl,
     IndexAttacker,
     Par as AttackerPar,
