@@ -11,8 +11,11 @@ arms' "curves" are directly comparable.
 Protocol
 --------
 Let T = --max-iters (default 100000) be the per-run iteration cap, and log every
---log-every (default 50) iterations. At iteration t we hold the running-average
-iterate  l_t = (1/t) * sum_{s<=t} l_s  and log (l_t, V*(l_t)).
+--log-every (default 50) iterations. At iteration t we hold the averaged iterate
+l_bar_t and log (l_bar_t, V*(l_bar_t)). The exact arm uses the uniform average
+l_bar_t = (1/t) * sum_{s<=t} l_s; the STOCHASTIC arm can instead use a
+polynomially-weighted average with weight s^--avg-power (0 = uniform, the default;
+1 = linear/recency averaging).
 
   EXACT arm: the gradient is the exact O(Q^2) fold. We run a FIXED number of
     iterations --exact-iters (default 5000; NOT until convergence), then record
@@ -44,6 +47,20 @@ Outputs
 -------
   <out>_summary.csv : one row per network (exact stop + stochastic-to-target).
   <out>_curves.csv  : network_id, t, exact_obj, stoch_mean_obj, stoch_runs.
+  <out>_gradvar.csv : (only with --grad-var) one row per (run, iteration) for
+    EVERY iteration of the stochastic arm with t >= --var-from (default 0), giving
+    the per-component variance of the stochastic gradient at the current iterate
+    l_t. `persample_var` is the per-rollout variance Var(-rho*n_v*R) per control
+    (a property of l_t, batch-independent); the b-batch step's gradient variance
+    is persample_var / b (`total_estimator_var` = trace of that). Only the touched
+    (non-zero) components are stored, so the vectors stay compact on large nets.
+    Because a --grad-var run does not stop early at the target, keep --max-iters
+    modest to bound cost.
+  <out>_fixedvar.csv : (only with --fixed-var) the sample variance of the
+    stochastic gradient at ONE fixed representative allocation ell* (reached by
+    --fixed-var-iters exact-RM steps), one row per touched control: ell*, the
+    exact gradient there, the MC sample mean (should match it), the per-rollout
+    variance, and the b-batch estimator variance (var/b) for b in {1,10,100}.
 """
 
 from __future__ import annotations
@@ -56,6 +73,10 @@ import random
 import sys
 import time
 from math import exp
+
+# Large instances (Q >= 50k) carry a `probs` JSON field of several hundred KB,
+# which exceeds Python's default 128 KB CSV field cap; raise it so those rows load.
+csv.field_size_limit(10**9)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
@@ -78,7 +99,10 @@ from sp_gradients2 import (  # noqa: E402
 # Structure parsing -> generic nested form -> n-ary trees
 # ===========================================================================
 def parse_generic(text):
-    """Parse 'Ser(A,B)'/'Par(A,B)'/'name' into ('c',name)|('S',[..])|('P',[..])."""
+    """Parse 'Ser(...)'/'Par(...)'/'name' into ('c',name)|('S',[..])|('P',[..]).
+
+    Accepts BOTH binary (Ser(A,B)) and n-ary (Ser(A,B,C,...)) forms: an internal
+    node reads a comma-separated list of >= 1 children up to its closing paren."""
     pos = 0
 
     def parse():
@@ -87,9 +111,13 @@ def parse_generic(text):
         if head in ("Ser(", "Par("):
             op = "S" if head[:3] == "Ser" else "P"
             pos += 4
-            left = parse(); assert text[pos] == ","; pos += 1
-            right = parse(); assert text[pos] == ")"; pos += 1
-            return (op, [left, right])
+            kids = [parse()]
+            while text[pos] == ",":
+                pos += 1
+                kids.append(parse())
+            assert text[pos] == ")", f"expected ')' at {pos}: {text[pos:]!r}"
+            pos += 1
+            return (op, kids)
         start = pos
         while pos < len(text) and text[pos] not in ",)":
             pos += 1
@@ -171,8 +199,53 @@ def stochastic_gradient(node, probs, ell, rho, batch, rng, names):
     return {v: -rho * sum_nvR[v] / batch for v in names}
 
 
+def gradient_variance(node, probs, ell, rho, var_batch, rng, names):
+    """Per-COMPONENT variance of the pathwise stochastic gradient at `ell`.
+
+    The optimiser's per-rollout gradient sample is g_v = -rho * n_v * R (a random
+    vector; n_v = attempts on control v in a rollout, R = its discounted reward).
+    We draw `var_batch` INDEPENDENT optimal-attacker rollouts (an UNTIMED
+    measurement, separate from the step's own batch) and return, per control:
+
+        mean[v] = E_hat[g_v]                          -- the expected gradient,
+        var[v]  = Var_hat(g_v)  (unbiased, /(N-1))    -- the PER-SAMPLE variance.
+
+    The gradient the optimiser actually uses averages `b` such samples, so its
+    variance is var[v] / b -- reported downstream. Measuring the per-sample
+    variance (rather than the within-batch spread of the step's own batch) makes
+    the estimate batch-independent and, crucially, well-defined even at b = 1.
+
+    Rollouts with R = 0 contribute g_v = 0 for every v; they add nothing to the
+    running sums but DO count toward N = var_batch (the denominator), so the
+    zeros correctly enter both the mean and the variance.
+    """
+    net = build_attacker(node, probs, ell, rho)
+    policy = IndexAttacker(net)
+    s1 = {v: 0.0 for v in names}          # sum_i g_v^(i)
+    s2 = {v: 0.0 for v in names}          # sum_i (g_v^(i))^2
+    for _ in range(var_batch):
+        roll = policy.simulate(rng)
+        R = roll.reward
+        if R > 0.0:
+            counts = {}
+            for name, _k, _s in roll.history:
+                counts[name] = counts.get(name, 0) + 1
+            for name, c in counts.items():
+                g = -rho * c * R
+                s1[name] += g
+                s2[name] += g * g
+    value_profile.cache_clear()
+    mean = {v: s1[v] / var_batch for v in names}
+    if var_batch >= 2:
+        var = {v: max((s2[v] - s1[v] ** 2 / var_batch) / (var_batch - 1), 0.0)
+               for v in names}
+    else:
+        var = {v: 0.0 for v in names}
+    return mean, var
+
+
 def naive_fd_gradient(node, probs, ell, rho, batch, rng, names, h):
-    """The MOST PRIMITIVE stochastic gradient: forward finite differences of
+    """[NOT USED] The MOST PRIMITIVE stochastic gradient: forward finite differences of
     Monte-Carlo value estimates. For each control v,
 
         dV*/dl_v ~= ( Vhat(l + h e_v) - Vhat(l) ) / h,
@@ -213,6 +286,19 @@ def rm_step(ell, grad, cumulative_regret, names):
     return {v: 1.0 / n for v in names}
 
 
+def avg_weight(t, power):
+    """Weight of the iterate played at step t in the averaged iterate.
+
+    Polynomially-weighted (recency-weighted) averaging forms the output iterate as
+        l_bar_t = ( sum_{s<=t} s^power * l_s ) / ( sum_{s<=t} s^power ),
+    a standard generalisation of the running (Cesaro) average. `power = 0` recovers
+    uniform averaging (every iterate weighted equally); `power = 1` is linear
+    averaging (recent iterates weighted proportionally to s, as in Linear CFR);
+    larger powers lean harder on the tail. `s^power` is monotone in s, so this only
+    re-weights -- it never drops any iterate."""
+    return 1.0 if power == 0.0 else t ** power
+
+
 # ===========================================================================
 # Exact arm: one run of a FIXED number of iterations; returns curve + target
 # ===========================================================================
@@ -220,7 +306,9 @@ def run_exact(tree, names, rho, exact_iters, log_every, time_runs):
     """Run the (deterministic) exact-gradient RM for `exact_iters` iterations. The
     iterate/objective are identical every time, so we repeat the run `time_runs`
     times ONLY to average the wall-clock (timing jitter) and report its std. The
-    curve and target allocation are taken from the first pass."""
+    curve and target allocation are taken from the first pass. The exact arm uses
+    the plain uniform (Cesaro) average -- polynomial averaging is a stochastic-arm
+    option only, so the two arms' targets stay directly comparable."""
     n = len(names)
     curve = []                                   # (t, obj) -- deterministic
     target_ell = None
@@ -254,18 +342,37 @@ def run_exact(tree, names, rho, exact_iters, log_every, time_runs):
 # Stochastic arm: `runs` independent runs at batch b, until each reaches `target`
 # ===========================================================================
 def run_stochastic(node, probs, tree, names, rho, batch, T, log_every, runs,
-                   seed, target, check_every, estimator, fd_step):
+                   seed, target, check_every, estimator, fd_step,
+                   grad_var=False, var_batch=0, var_from=0, avg_power=0.0):
     """Curve checkpoints are logged every `log_every` iterations, but the FIRST
     dip below `target` is detected every `check_every` iterations (default 1 =
-    every iteration) so `iters_to_target` is not snapped to the log grid."""
+    every iteration) so `iters_to_target` is not snapped to the log grid.
+
+    The reported iterate is the polynomially-weighted average of the stochastic
+    iterates, weight s^`avg_power` per step (see `avg_weight`): 0 = the usual
+    uniform average, 1 = linear (recency) averaging, etc. This is a stochastic-arm
+    knob -- it changes which averaged iterate is monitored and target-checked.
+
+    When `grad_var` is set, we record the per-component variance of the stochastic
+    gradient at the CURRENT iterate l_t (see `gradient_variance`) at EVERY
+    iteration with t >= `var_from` (default 0 = every iteration of the arm). So
+    the whole trace is captured, a `grad_var` run does NOT stop early at the
+    target -- it runs the full T -- though the target crossing is still recorded
+    for the summary. The variance measurement is UNTIMED and drawn from an
+    independent RNG, so it neither perturbs the trajectory nor inflates the
+    wall-clock. Returns `(per_run, reached, gradvar_rows)`.
+    """
     n = len(names)
     per_run = []              # list of {t: (obj, cum_time)}
     reached = []              # list of (iters_to_target, time_to_target) or None
+    gradvar_rows = []         # list of per-checkpoint variance records (if grad_var)
     for r in range(runs):
         rng = random.Random(f"{seed}:{r}")
+        var_rng = random.Random(f"{seed}:var:{r}")   # separate stream: no trajectory drift
         ell = {v: 1.0 / n for v in names}
         cumulative_regret = {v: 0.0 for v in names}
-        ell_sum = {v: 0.0 for v in names}
+        ell_sum = {v: 0.0 for v in names}       # polynomially-weighted sum of iterates
+        w_total = 0.0                            # sum of the weights so far
         cum_time = 0.0
         checkpoints = {}
         hit = None
@@ -273,12 +380,15 @@ def run_stochastic(node, probs, tree, names, rho, batch, T, log_every, runs,
             # TIMED: only the essential optimisation work (avg update + gradient
             # + RM step), symmetric with the exact arm.
             start = time.perf_counter()
+            w = avg_weight(t, avg_power)
             for v in names:
-                ell_sum[v] += ell[v]
-            if estimator == "fd":
+                ell_sum[v] += w * ell[v]
+            w_total += w
+            if estimator == "fd": # DO NOT USE
                 grad = naive_fd_gradient(node, probs, ell, rho, batch, rng, names, fd_step)
             else:
                 grad = stochastic_gradient(node, probs, ell, rho, batch, rng, names)
+            ell_t = ell                                  # the point the gradient was taken at
             ell = rm_step(ell, grad, cumulative_regret, names)
             cum_time += time.perf_counter() - start
 
@@ -287,18 +397,83 @@ def run_stochastic(node, probs, tree, names, rho, batch, T, log_every, runs,
             is_curve = (t == 1 or t % log_every == 0 or t == T)
             is_check = (hit is None and t % check_every == 0)
             if is_curve or is_check:
-                ell_bar = {v: ell_sum[v] / t for v in names}
+                ell_bar = {v: ell_sum[v] / w_total for v in names}
                 obj = exact_value(tree, ell_bar, rho)
                 if is_curve:
                     checkpoints[t] = (obj, cum_time)
                 if hit is None and is_check and obj <= target * (1.0 + 1e-9):
                     hit = (t, cum_time)
                     checkpoints[t] = (obj, cum_time)         # keep the crossing pt
-                    break                                    # this run reached target
+
+            # UNTIMED: per-component variance of the stochastic gradient at l_t,
+            # recorded at EVERY iteration once t >= var_from (default 0).
+            if grad_var and t >= var_from:
+                gmean, gvar = gradient_variance(
+                    node, probs, ell_t, rho, var_batch, var_rng, names)
+                total_ps = sum(gvar.values())                # trace of per-sample cov
+                gl2 = sum(v * v for v in gmean.values()) ** 0.5
+                mv_ctrl, mv = max(gvar.items(), key=lambda kv: kv[1])
+                gradvar_rows.append({
+                    "network_id": None, "run": r, "t": t, "batch": batch,
+                    "var_batch": var_batch, "grad_l2": gl2,
+                    "total_persample_var": total_ps,
+                    "total_estimator_var": total_ps / batch,   # variance of the step's b-batch mean
+                    "max_var_control": mv_ctrl, "max_var": mv,
+                    # store only the touched (non-zero) components to stay compact:
+                    "grad_mean": {v: round(gmean[v], 8) for v in names if gmean[v] != 0.0},
+                    "persample_var": {v: round(gvar[v], 8) for v in names if gvar[v] > 0.0},
+                })
+
+            # Normal runs stop once the target is reached; a --grad-var run keeps
+            # going to T so the per-iteration variance for t >= var_from is captured.
+            if hit is not None and is_check and t == hit[0] and not grad_var:
+                break
         per_run.append(checkpoints)
         reached.append(hit)
         value_profile.cache_clear()
-    return per_run, reached
+    return per_run, reached, gradvar_rows
+
+
+# ===========================================================================
+# Sample variance of the stochastic gradient at a FIXED representative ell
+# ===========================================================================
+def fixed_point_variance(node, probs, tree, names, rho, warmup_iters, sample_size,
+                         seed, avg_power=0.0):
+    """Sample variance of the stochastic gradient at a single FIXED allocation.
+
+    Rather than tracking the variance at the moving iterate, we pin one
+    representative point ell* and estimate Cov(g) there from many samples:
+
+      1. Run the (deterministic) EXACT-gradient RM for `warmup_iters` steps to
+         reach a representative near-optimal iterate; take ell* = its
+         (polynomially-weighted) average. Deterministic, so ell* is reproducible.
+      2. Draw `sample_size` INDEPENDENT single-rollout gradient samples
+         g = (-rho * n_v * R)_v at the FIXED ell* and return their per-component
+         sample mean and variance.
+
+    Because ell* does not move, this is a clean estimate of the per-sample
+    gradient variance at that operating point (a property of ell*, batch-
+    independent); a batch-b step's gradient variance is this / b. Returns
+    (ell_star, exact_grad, sample_mean, persample_var), where exact_grad is the
+    true dV*/dl at ell* (the stochastic mean should match it -- a sanity check)."""
+    n = len(names)
+    ell = {v: 1.0 / n for v in names}
+    cumulative_regret = {v: 0.0 for v in names}
+    ell_sum = {v: 0.0 for v in names}
+    w_total = 0.0
+    for t in range(1, warmup_iters + 1):
+        w = avg_weight(t, avg_power)
+        for v in names:
+            ell_sum[v] += w * ell[v]
+        w_total += w
+        _v, grad = exact_gradient(tree, ell, rho)
+        ell = rm_step(ell, grad, cumulative_regret, names)
+    ell_star = {v: ell_sum[v] / w_total for v in names}
+    _val, exact_grad = exact_gradient(tree, ell_star, rho)       # true gradient at ell*
+    rng = random.Random(f"{seed}:fixedvar")
+    sample_mean, persample_var = gradient_variance(
+        node, probs, ell_star, rho, sample_size, rng, names)
+    return ell_star, exact_grad, sample_mean, persample_var
 
 
 # ===========================================================================
@@ -321,13 +496,21 @@ def load_networks(csv_path):
 
 
 SUMMARY_FIELDS = ["network_id", "n_controls", "total_Q", "rho", "batch", "runs",
-                  "exact_runs", "exact_iters", "max_iters",
+                  "avg_power", "exact_runs", "exact_iters", "max_iters",
                   "exact_time_s", "exact_time_std", "target_obj",
                   "stoch_reached", "stoch_iters_to_target", "stoch_time_to_target_s",
                   "extra_iters", "extra_time_s", "iter_ratio", "time_ratio",
                   "target_ell"]
 CURVE_FIELDS = ["network_id", "t", "exact_obj", "stoch_mean_obj",
                 "stoch_std_obj", "stoch_sem_obj", "stoch_runs"]
+# Per-checkpoint stochastic-gradient variance (one row per run x checkpoint).
+GRADVAR_FIELDS = ["network_id", "run", "t", "batch", "var_batch", "grad_l2",
+                  "total_persample_var", "total_estimator_var",
+                  "max_var_control", "max_var", "grad_mean", "persample_var"]
+# Sample variance of the gradient at a fixed ell* (one row per touched control).
+FIXEDVAR_FIELDS = ["network_id", "warmup_iters", "sample_size", "control",
+                   "ell_star", "exact_grad", "sample_mean_grad", "persample_var",
+                   "estimator_var_b1", "estimator_var_b10", "estimator_var_b100"]
 
 
 def _mean(xs):
@@ -349,6 +532,55 @@ def _mean_std(xs):
     return m, std, std / (len(xs) ** 0.5)
 
 
+def run_fixed_var(args, nets):
+    """--fixed-var mode: per network, estimate the sample variance of the
+    stochastic gradient at a fixed representative ell* (see `fixed_point_variance`)
+    and write <out>_fixedvar.csv (one row per touched control)."""
+    ffile = open(args.out + "_fixedvar.csv", "w", newline="")
+    fwr = csv.DictWriter(ffile, fieldnames=FIXEDVAR_FIELDS); fwr.writeheader()
+    print(f"{len(nets)} networks | FIXED-ell variance | warmup_iters="
+          f"{args.fixed_var_iters} sample_size={args.fixed_var_samples} "
+          f"avg_power={args.avg_power} rho={args.rho}\n", flush=True)
+
+    for idx, info in enumerate(nets, 1):
+        if info["probs"] is None:
+            raise ValueError(f"network {info['network_id']}: needs probs")
+        node = flatten_generic(parse_generic(info["structure"]))
+        names = leaf_names(node)
+        tree = build_defender(node, info["probs"])
+        print(f"=== [{idx}/{len(nets)}] network {info['network_id']}: "
+              f"n={info['n_controls']} Q={info['total_Q']} ===", flush=True)
+
+        ell_star, exact_grad, sample_mean, persample_var = fixed_point_variance(
+            node, info["probs"], tree, names, args.rho, args.fixed_var_iters,
+            args.fixed_var_samples, args.seed, args.avg_power)
+
+        touched = [v for v in names if persample_var[v] > 0.0 or sample_mean[v] != 0.0]
+        for v in touched:
+            pv = persample_var[v]
+            fwr.writerow({
+                "network_id": info["network_id"], "warmup_iters": args.fixed_var_iters,
+                "sample_size": args.fixed_var_samples, "control": v,
+                "ell_star": f"{ell_star[v]:.8f}", "exact_grad": f"{exact_grad[v]:.8f}",
+                "sample_mean_grad": f"{sample_mean[v]:.8f}", "persample_var": f"{pv:.8f}",
+                "estimator_var_b1": f"{pv:.8f}", "estimator_var_b10": f"{pv / 10:.8f}",
+                "estimator_var_b100": f"{pv / 100:.8f}",
+            })
+        ffile.flush()
+
+        trace = sum(persample_var.values())         # trace of Cov(g) at ell*
+        # how well the stochastic mean matches the true (exact) gradient at ell*
+        bias = max(abs(sample_mean[v] - exact_grad[v]) for v in names)
+        print(f"  ell* from {args.fixed_var_iters} exact iters; {len(touched)} touched controls\n"
+              f"  trace Cov(g)={trace:.5f}  (estimator var: b1={trace:.5f} "
+              f"b10={trace / 10:.5f} b100={trace / 100:.5f})\n"
+              f"  max|stoch_mean - exact_grad|={bias:.5f}  (should be small: MC mean ~ true grad)",
+              flush=True)
+
+    ffile.close()
+    print(f"\nwrote {args.out}_fixedvar.csv")
+
+
 def run(args):
     nets = load_networks(args.csv)
     nets = [nw for nw in nets if nw["network_id"] >= args.start_id]
@@ -359,10 +591,22 @@ def run(args):
     if not nets:
         raise SystemExit("no networks in range")
 
+    if args.fixed_var:
+        return run_fixed_var(args, nets)
+
+    if args.grad_var and args.max_iters < args.var_from:
+        print(f"warning: --grad-var logs variance for t >= {args.var_from} but --max-iters "
+              f"= {args.max_iters} < {args.var_from}; no rows will be logged. Raise --max-iters.",
+              flush=True)
+
     sfile = open(args.out + "_summary.csv", "w", newline="")
     swr = csv.DictWriter(sfile, fieldnames=SUMMARY_FIELDS); swr.writeheader()
     cfile = open(args.out + "_curves.csv", "w", newline="")
     cwr = csv.DictWriter(cfile, fieldnames=CURVE_FIELDS); cwr.writeheader()
+    vfile = vwr = None
+    if args.grad_var:
+        vfile = open(args.out + "_gradvar.csv", "w", newline="")
+        vwr = csv.DictWriter(vfile, fieldnames=GRADVAR_FIELDS); vwr.writeheader()
 
     print(f"{len(nets)} networks | batch={args.batch} runs={args.runs} "
           f"exact_iters={args.exact_iters} T={args.max_iters} "
@@ -386,11 +630,12 @@ def run(args):
               f"+-{tgt['time_std']:.3f}s (avg of {tgt['runs']})  "
               f"target V*={target:.6f}", flush=True)
 
-        # STOCHASTIC arm
-        per_run, reached = run_stochastic(
+        # STOCHASTIC arm (gradient variance logged every iter with t >= var_from)
+        per_run, reached, gradvar_rows = run_stochastic(
             node, info["probs"], tree, names, args.rho, args.batch, args.max_iters,
             args.log_every, args.runs, args.seed, target, args.check_every,
-            args.estimator, args.fd_step)
+            args.estimator, args.fd_step, args.grad_var, args.var_batch, args.var_from,
+            args.avg_power)
         iters_to = _mean([r[0] for r in reached if r is not None])
         time_to = _mean([r[1] for r in reached if r is not None])
         n_reached = sum(1 for r in reached if r is not None)
@@ -403,7 +648,7 @@ def run(args):
         swr.writerow({
             "network_id": info["network_id"], "n_controls": info["n_controls"],
             "total_Q": info["total_Q"], "rho": args.rho, "batch": args.batch,
-            "runs": args.runs, "exact_runs": tgt["runs"],
+            "runs": args.runs, "avg_power": args.avg_power, "exact_runs": tgt["runs"],
             "exact_iters": tgt["stop_iter"], "max_iters": args.max_iters,
             "exact_time_s": f"{tgt['time_s']:.6f}", "exact_time_std": f"{tgt['time_std']:.6f}",
             "target_obj": f"{target:.8f}", "stoch_reached": f"{n_reached}/{args.runs}",
@@ -435,13 +680,29 @@ def run(args):
             })
         cfile.flush()
 
+        # gradient-variance rows (one per run x checkpoint), if enabled
+        if vwr is not None:
+            for row in gradvar_rows:
+                row = dict(row, network_id=info["network_id"])
+                row["grad_mean"] = json.dumps(row["grad_mean"])
+                row["persample_var"] = json.dumps(row["persample_var"])
+                for k in ("grad_l2", "total_persample_var", "total_estimator_var", "max_var"):
+                    row[k] = f"{row[k]:.10g}"
+                vwr.writerow(row)
+            vfile.flush()
+
         rep_extra = f"{extra_iters:.0f}" if extra_iters is not None else "n/a"
         print(f"  stoch(b={args.batch}): reached {n_reached}/{args.runs}  "
               f"iters_to_target={iters_to and round(iters_to)}  "
               f"time={time_to and round(time_to, 3)}s  extra_iters={rep_extra}", flush=True)
 
     sfile.close(); cfile.close()
-    print(f"\nwrote {args.out}_summary.csv and {args.out}_curves.csv")
+    if vfile is not None:
+        vfile.close()
+    outs = f"{args.out}_summary.csv and {args.out}_curves.csv"
+    if args.grad_var:
+        outs += f" and {args.out}_gradvar.csv"
+    print(f"\nwrote {outs}")
 
 
 def build_arg_parser():
@@ -458,6 +719,10 @@ def build_arg_parser():
     p.add_argument("--fd-step", type=float, default=1e-2,
                    help="finite-difference step h (only for --estimator fd)")
     p.add_argument("--runs", type=int, default=10, help="independent stochastic runs to average")
+    p.add_argument("--avg-power", type=float, default=1.0,
+                   help="polynomial averaging exponent for the STOCHASTIC arm's iterate: the "
+                        "averaged l_bar weights step s by s^power. 0 = uniform average "
+                        "(default), 1 = linear/recency averaging, higher = leans on the tail.")
     p.add_argument("--exact-runs", type=int, default=10,
                    help="repeats of the (deterministic) exact run to average its wall-clock")
     p.add_argument("--exact-iters", type=int, default=5000,
@@ -468,6 +733,24 @@ def build_arg_parser():
                    help="cadence (iters) for detecting the stochastic arm's first "
                         "dip below target; 1 = every iteration (precise), larger = coarser/faster")
     p.add_argument("--rho", type=float, default=5.0, help="discount rate rho/lambda (> 0)")
+    p.add_argument("--grad-var", action="store_true",
+                   help="record the per-component variance of the stochastic gradient (a vector) "
+                        "at the current iterate at EVERY iteration of the stochastic arm (writes "
+                        "<out>_gradvar.csv). A --grad-var run does not stop early at the target; "
+                        "it runs the full --max-iters, so keep --max-iters modest to bound cost.")
+    p.add_argument("--var-from", type=int, default=0,
+                   help="log gradient variance only at iterations t >= this (default 0 = every "
+                        "iteration; set e.g. --var-from EXACT_ITERS to skip the early transient).")
+    p.add_argument("--var-batch", type=int, default=500,
+                   help="rollouts per (untimed) gradient-variance measurement (--grad-var)")
+    p.add_argument("--fixed-var", action="store_true",
+                   help="standalone mode: estimate the sample variance of the stochastic "
+                        "gradient at ONE fixed representative ell* (reached by --fixed-var-iters "
+                        "exact RM steps) and write <out>_fixedvar.csv. Skips the exact-vs-stochastic run.")
+    p.add_argument("--fixed-var-iters", type=int, default=2000,
+                   help="exact-RM warmup steps to reach the fixed ell* (--fixed-var)")
+    p.add_argument("--fixed-var-samples", type=int, default=5000,
+                   help="independent single-rollout gradient samples at ell* (--fixed-var)")
     p.add_argument("--seed", type=int, default=0, help="RNG seed for stochastic rollouts")
     p.add_argument("--start-id", type=int, default=0)
     p.add_argument("--end-id", type=int, default=None)
