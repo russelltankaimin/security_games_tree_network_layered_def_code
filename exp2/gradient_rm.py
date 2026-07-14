@@ -54,8 +54,7 @@ Outputs
     (a property of l_t, batch-independent); the b-batch step's gradient variance
     is persample_var / b (`total_estimator_var` = trace of that). Only the touched
     (non-zero) components are stored, so the vectors stay compact on large nets.
-    Because a --grad-var run does not stop early at the target, keep --max-iters
-    modest to bound cost.
+    The run stops at the target as usual, so the trace spans t up to iters_to_target.
   <out>_fixedvar.csv : (only with --fixed-var) the sample variance of the
     stochastic gradient at ONE fixed representative allocation ell* (reached by
     --fixed-var-iters exact-RM steps), one row per touched control: ell*, the
@@ -355,12 +354,11 @@ def run_stochastic(node, probs, tree, names, rho, batch, T, log_every, runs,
 
     When `grad_var` is set, we record the per-component variance of the stochastic
     gradient at the CURRENT iterate l_t (see `gradient_variance`) at EVERY
-    iteration with t >= `var_from` (default 0 = every iteration of the arm). So
-    the whole trace is captured, a `grad_var` run does NOT stop early at the
-    target -- it runs the full T -- though the target crossing is still recorded
-    for the summary. The variance measurement is UNTIMED and drawn from an
-    independent RNG, so it neither perturbs the trajectory nor inflates the
-    wall-clock. Returns `(per_run, reached, gradvar_rows)`.
+    iteration with t >= `var_from` (default 0 = every iteration). The run stops as
+    soon as it reaches the target (same as a normal run), so the variance trace
+    spans t = var_from .. iters_to_target. The variance measurement is UNTIMED and
+    drawn from an independent RNG, so it neither perturbs the trajectory nor
+    inflates the wall-clock. Returns `(per_run, reached, gradvar_rows)`.
     """
     n = len(names)
     per_run = []              # list of {t: (obj, cum_time)}
@@ -424,9 +422,9 @@ def run_stochastic(node, probs, tree, names, rho, batch, T, log_every, runs,
                     "persample_var": {v: round(gvar[v], 8) for v in names if gvar[v] > 0.0},
                 })
 
-            # Normal runs stop once the target is reached; a --grad-var run keeps
-            # going to T so the per-iteration variance for t >= var_from is captured.
-            if hit is not None and is_check and t == hit[0] and not grad_var:
+            # Stop once the target is reached (the gradient-variance for this
+            # iteration is already logged above, so the trace covers t up to here).
+            if hit is not None and is_check and t == hit[0]:
                 break
         per_run.append(checkpoints)
         reached.append(hit)
@@ -735,9 +733,9 @@ def build_arg_parser():
     p.add_argument("--rho", type=float, default=5.0, help="discount rate rho/lambda (> 0)")
     p.add_argument("--grad-var", action="store_true",
                    help="record the per-component variance of the stochastic gradient (a vector) "
-                        "at the current iterate at EVERY iteration of the stochastic arm (writes "
-                        "<out>_gradvar.csv). A --grad-var run does not stop early at the target; "
-                        "it runs the full --max-iters, so keep --max-iters modest to bound cost.")
+                        "at the current iterate at EVERY iteration with t >= --var-from (writes "
+                        "<out>_gradvar.csv). The run stops at the target as usual, so the trace "
+                        "spans t up to iters_to_target.")
     p.add_argument("--var-from", type=int, default=0,
                    help="log gradient variance only at iterations t >= this (default 0 = every "
                         "iteration; set e.g. --var-from EXACT_ITERS to skip the early transient).")
