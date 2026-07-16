@@ -311,7 +311,10 @@ class PiecewiseLinear:
         for u in P.xs:
             if u <= 1e-15 or u >= 1.0 - 1e-15:
                 continue  # u = 0 -> gamma = 0; u = 1 -> gamma = alpha_R; both are R knots
-            while piece + 1 < len(u_at_knot) and u_at_knot[piece + 1] < u:
+            # If u exceeds every knot (u_at_knot[-1] < u, e.g. R's last knot < 1),
+            # stay on the LAST piece -- the pre-image is clamped below. `piece + 2 <
+            # len(Rx)` keeps piece <= len(Rx) - 2 so Rx[piece + 1] stays in range.
+            while piece + 2 < len(Rx) and u_at_knot[piece + 1] < u:
                 piece += 1
             ax, bx = Rx[piece], Rx[piece + 1]
             ay, by = Ry[piece], Ry[piece + 1]
