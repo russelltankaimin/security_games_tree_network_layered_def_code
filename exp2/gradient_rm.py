@@ -92,6 +92,13 @@ from sp_gradients2 import (  # noqa: E402
     Control as DControl, Series as DSeries, Parallel as DParallel,
     value_and_gradient,
 )
+import sp_gradients3 as _G3   # noqa: E402  (binary reverse-tape / direct m-ary oracles)
+
+# Which exact oracle exact_gradient/exact_value use; set from --exact-impl in run().
+#   "fold" : sp_gradients2 weight-list fold (O(Q^2) worst case)
+#   "tape" : sp_gradients3 binary reverse-tape (O(Q d_b))
+#   "mary" : sp_gradients3 direct m-ary event/segment trees (O(sum_G Q_G log m_G))
+EXACT_IMPL = "fold"
 
 
 # ===========================================================================
@@ -172,14 +179,21 @@ def build_attacker(node, probs, ell, rho):
 # Oracles (objective is always the EXACT n-ary fold)
 # ===========================================================================
 def exact_gradient(tree, ell, rho):
-    """Exact value and gradient dV*/dl via the native n-ary fold."""
-    return value_and_gradient(tree, allocation=ell, discount_rate=rho, native=True)
+    """Exact value and (value, gradient dV*/dl) from the selected oracle (EXACT_IMPL)."""
+    if EXACT_IMPL == "fold":
+        return value_and_gradient(tree, allocation=ell, discount_rate=rho, native=True)
+    return _G3.value_and_gradient(tree, ell, rho,
+                                  method=("mary" if EXACT_IMPL == "mary" else "binary"))
 
 
 def exact_value(tree, ell, rho):
     """V*(l) only (no tie-breaking pass); the monitored objective."""
-    value, _ = value_and_gradient(tree, allocation=ell, discount_rate=rho,
-                                  break_ties=False, native=True)
+    if EXACT_IMPL == "fold":
+        value, _ = value_and_gradient(tree, allocation=ell, discount_rate=rho,
+                                      break_ties=False, native=True)
+        return value
+    value, _ = _G3.value_and_gradient(tree, ell, rho,
+                                      method=("mary" if EXACT_IMPL == "mary" else "binary"))
     return value
 
 
@@ -580,6 +594,8 @@ def run_fixed_var(args, nets):
 
 
 def run(args):
+    global EXACT_IMPL
+    EXACT_IMPL = args.exact_impl
     nets = load_networks(args.csv)
     nets = [nw for nw in nets if nw["network_id"] >= args.start_id]
     if args.end_id is not None:
@@ -731,6 +747,10 @@ def build_arg_parser():
                    help="cadence (iters) for detecting the stochastic arm's first "
                         "dip below target; 1 = every iteration (precise), larger = coarser/faster")
     p.add_argument("--rho", type=float, default=5.0, help="discount rate rho/lambda (> 0)")
+    p.add_argument("--exact-impl", choices=["fold", "tape", "mary"], default="fold",
+                   help="exact-gradient oracle: fold = sp_gradients2 weight-list (O(Q^2) "
+                        "worst case); tape = sp_gradients3 binary reverse-tape (O(Q d_b)); "
+                        "mary = sp_gradients3 direct m-ary event/segment trees (O(Q log m))")
     p.add_argument("--grad-var", action="store_true",
                    help="record the per-component variance of the stochastic gradient (a vector) "
                         "at the current iterate at EVERY iteration with t >= --var-from (writes "

@@ -236,18 +236,20 @@ def control_profile(discount_factor, success_probs, lockout):
     return profiles_by_count[0], profiles_by_count, thresholds_by_count
 
 
-def parallel_profile(left_profile, right_profile):
-    """Race of two branches:  profile(s) = 1 - integral_s^1 (g_left * g_right),
-    so the profile's slope is the product of the two branch slopes."""
-    breakpoints = sorted(set(left_profile.breakpoints) | set(right_profile.breakpoints))
-    values = [None] * len(breakpoints)
-    values[-1] = 1.0
-    for i in range(len(breakpoints) - 2, -1, -1):
-        left, right = breakpoints[i], breakpoints[i + 1]
-        midpoint = 0.5 * (left + right)
-        slope_product = left_profile.right_slope(midpoint) * right_profile.right_slope(midpoint)
-        values[i] = values[i + 1] - slope_product * (right - left)
-    return PiecewiseLinearProfile(breakpoints, values)
+# --- DEAD: binary-fold `parallel_profile` (superseded by `parallel_profile_nary`;
+# --- reached only via the unused native=False path). Kept commented for reference.
+# def parallel_profile(left_profile, right_profile):
+#     """Race of two branches:  profile(s) = 1 - integral_s^1 (g_left * g_right),
+#     so the profile's slope is the product of the two branch slopes."""
+#     breakpoints = sorted(set(left_profile.breakpoints) | set(right_profile.breakpoints))
+#     values = [None] * len(breakpoints)
+#     values[-1] = 1.0
+#     for i in range(len(breakpoints) - 2, -1, -1):
+#         left, right = breakpoints[i], breakpoints[i + 1]
+#         midpoint = 0.5 * (left + right)
+#         slope_product = left_profile.right_slope(midpoint) * right_profile.right_slope(midpoint)
+#         values[i] = values[i + 1] - slope_product * (right - left)
+#     return PiecewiseLinearProfile(breakpoints, values)
 
 
 def parallel_profile_nary(profiles):
@@ -341,26 +343,28 @@ def series_profile(upstream_profile, downstream_profile):
 
 # Cached per-node forward data, consumed by the backward pass.
 _ControlData = namedtuple("_ControlData", ["profile", "profiles_by_count", "thresholds_by_count"])
-_InternalData = namedtuple("_InternalData", ["profile", "left_profile", "right_profile"])
-
-
-def compute_profiles(node, discount_factors, forward_cache):
-    """Forward fold; records each node's profile (and a control's count ladder)
-    into forward_cache keyed by node identity. Returns the node's profile."""
-    if isinstance(node, ControlNode):
-        profile, profiles_by_count, thresholds = control_profile(
-            discount_factors[node.name], node.success_probs, node.lockout)
-        forward_cache[id(node)] = _ControlData(profile, profiles_by_count, thresholds)
-        return profile
-    left, right = node.children
-    left_profile = compute_profiles(left, discount_factors, forward_cache)
-    right_profile = compute_profiles(right, discount_factors, forward_cache)
-    if isinstance(node, SeriesNode):
-        profile = series_profile(left_profile, right_profile)
-    else:
-        profile = parallel_profile(left_profile, right_profile)
-    forward_cache[id(node)] = _InternalData(profile, left_profile, right_profile)
-    return profile
+# --- DEAD: binary-fold forward pass (superseded by `compute_profiles_nary`;
+# --- reached only via the unused native=False path). Kept commented for reference.
+# _InternalData = namedtuple("_InternalData", ["profile", "left_profile", "right_profile"])
+#
+#
+# def compute_profiles(node, discount_factors, forward_cache):
+#     """Forward fold; records each node's profile (and a control's count ladder)
+#     into forward_cache keyed by node identity. Returns the node's profile."""
+#     if isinstance(node, ControlNode):
+#         profile, profiles_by_count, thresholds = control_profile(
+#             discount_factors[node.name], node.success_probs, node.lockout)
+#         forward_cache[id(node)] = _ControlData(profile, profiles_by_count, thresholds)
+#         return profile
+#     left, right = node.children
+#     left_profile = compute_profiles(left, discount_factors, forward_cache)
+#     right_profile = compute_profiles(right, discount_factors, forward_cache)
+#     if isinstance(node, SeriesNode):
+#         profile = series_profile(left_profile, right_profile)
+#     else:
+#         profile = parallel_profile(left_profile, right_profile)
+#     forward_cache[id(node)] = _InternalData(profile, left_profile, right_profile)
+#     return profile
 
 
 # =========================================================================
@@ -470,57 +474,59 @@ def leaf_beta_sensitivity(outside_option, control_node, discount_factor, control
     return sensitivity
 
 
-def compute_gradient(tree, discount_factors, discount_rate, forward_cache, rel_tol=0.0):
-    """Backward pass returning {control_name: d V* / d allocation[name]}.
-
-    rel_tol > 0 relatively-prunes the adjoint weight lists at Parallel nodes (a
-    small, bounded approximation that avoids the O(Q^2) adjoint blow-up); 0 = exact."""
-    gradient = {}
-
-    def propagate(node, weight_list):
-        node_data = forward_cache[id(node)]
-        if isinstance(node, ControlNode):
-            discount_factor = discount_factors[node.name]
-            beta_sensitivity = sum(
-                weight * leaf_beta_sensitivity(point, node, discount_factor, node_data)
-                for point, weight in weight_list)
-            # Chain rule from beta to the allocation: d beta / d allocation = -rho * beta.
-            gradient[node.name] = -discount_rate * discount_factor * beta_sensitivity
-            return
-
-        left, right = node.children
-        left_profile = node_data.left_profile
-        right_profile = node_data.right_profile
-
-        if isinstance(node, ParallelNode):
-            cumulative = cumulative_weight(weight_list)
-            query_points = {point for point, _ in weight_list}
-            # Each branch is modulated by the OTHER branch's slope.
-            left_weights = step_function_to_weight_list(
-                lambda z: right_profile.right_slope(z) * cumulative(z),
-                set(right_profile.breakpoints) | query_points)
-            right_weights = step_function_to_weight_list(
-                lambda z: left_profile.right_slope(z) * cumulative(z),
-                set(left_profile.breakpoints) | query_points)
-            propagate(left, _prune_weight_list(left_weights, rel_tol))
-            propagate(right, _prune_weight_list(right_weights, rel_tol))
-        else:  # SeriesNode: left is upstream, right is downstream
-            def relocate(point):
-                downstream_value = right_profile(point)
-                return point / downstream_value if downstream_value > _ZERO_DIVISION_GUARD else 0.0
-
-            upstream_weights = [
-                (relocate(point), weight * right_profile(point))
-                for point, weight in weight_list]
-            downstream_weights = [
-                (point, weight * (left_profile(relocate(point))
-                                  - relocate(point) * left_profile.right_slope(relocate(point))))
-                for point, weight in weight_list]
-            propagate(left, upstream_weights)
-            propagate(right, downstream_weights)
-
-    propagate(tree, [(0.0, 1.0)])     # seed: V* = root_profile(0)
-    return gradient
+# --- DEAD: binary-fold backward pass (superseded by `compute_gradient_nary`;
+# --- reached only via the unused native=False path). Kept commented for reference.
+# def compute_gradient(tree, discount_factors, discount_rate, forward_cache, rel_tol=0.0):
+#     """Backward pass returning {control_name: d V* / d allocation[name]}.
+#
+#     rel_tol > 0 relatively-prunes the adjoint weight lists at Parallel nodes (a
+#     small, bounded approximation that avoids the O(Q^2) adjoint blow-up); 0 = exact."""
+#     gradient = {}
+#
+#     def propagate(node, weight_list):
+#         node_data = forward_cache[id(node)]
+#         if isinstance(node, ControlNode):
+#             discount_factor = discount_factors[node.name]
+#             beta_sensitivity = sum(
+#                 weight * leaf_beta_sensitivity(point, node, discount_factor, node_data)
+#                 for point, weight in weight_list)
+#             # Chain rule from beta to the allocation: d beta / d allocation = -rho * beta.
+#             gradient[node.name] = -discount_rate * discount_factor * beta_sensitivity
+#             return
+#
+#         left, right = node.children
+#         left_profile = node_data.left_profile
+#         right_profile = node_data.right_profile
+#
+#         if isinstance(node, ParallelNode):
+#             cumulative = cumulative_weight(weight_list)
+#             query_points = {point for point, _ in weight_list}
+#             # Each branch is modulated by the OTHER branch's slope.
+#             left_weights = step_function_to_weight_list(
+#                 lambda z: right_profile.right_slope(z) * cumulative(z),
+#                 set(right_profile.breakpoints) | query_points)
+#             right_weights = step_function_to_weight_list(
+#                 lambda z: left_profile.right_slope(z) * cumulative(z),
+#                 set(left_profile.breakpoints) | query_points)
+#             propagate(left, _prune_weight_list(left_weights, rel_tol))
+#             propagate(right, _prune_weight_list(right_weights, rel_tol))
+#         else:  # SeriesNode: left is upstream, right is downstream
+#             def relocate(point):
+#                 downstream_value = right_profile(point)
+#                 return point / downstream_value if downstream_value > _ZERO_DIVISION_GUARD else 0.0
+#
+#             upstream_weights = [
+#                 (relocate(point), weight * right_profile(point))
+#                 for point, weight in weight_list]
+#             downstream_weights = [
+#                 (point, weight * (left_profile(relocate(point))
+#                                   - relocate(point) * left_profile.right_slope(relocate(point))))
+#                 for point, weight in weight_list]
+#             propagate(left, upstream_weights)
+#             propagate(right, downstream_weights)
+#
+#     propagate(tree, [(0.0, 1.0)])     # seed: V* = root_profile(0)
+#     return gradient
 
 
 # =========================================================================
@@ -683,17 +689,18 @@ def brute_force_value(tree, discount_factors):
 def _value_and_raw_gradient(work_tree, names, allocation, discount_rate, native=False, rel_tol=0.0):
     """Forward fold + one backward pass at the given allocation (no tie handling).
 
-    native=False -> binary fold (work_tree must be a binary tree);
-    native=True  -> n-ary fold directly on the original tree.
-    rel_tol > 0 relatively-prunes the backward adjoint (approximate); 0 = exact."""
+    Always uses the native n-ary fold (it handles binary trees too, so the old
+    `native` flag is retained only for call-site compatibility). rel_tol > 0
+    relatively-prunes the backward adjoint (approximate); 0 = exact."""
     discount_factors = {name: math.exp(-discount_rate * allocation[name]) for name in names}
     forward_cache = {}
-    if native:
-        root_profile = compute_profiles_nary(work_tree, discount_factors, forward_cache)
-        gradient = compute_gradient_nary(work_tree, discount_factors, discount_rate, forward_cache, rel_tol)
-    else:
-        root_profile = compute_profiles(work_tree, discount_factors, forward_cache)
-        gradient = compute_gradient(work_tree, discount_factors, discount_rate, forward_cache, rel_tol)
+    root_profile = compute_profiles_nary(work_tree, discount_factors, forward_cache)
+    gradient = compute_gradient_nary(work_tree, discount_factors, discount_rate, forward_cache, rel_tol)
+    # --- DEAD: old binary-fold branch (native=False), kept commented for reference:
+    # if native:
+    #     root_profile = compute_profiles_nary(...); gradient = compute_gradient_nary(...)
+    # else:
+    #     root_profile = compute_profiles(...); gradient = compute_gradient(...)
     return root_profile(0.0), gradient
 
 
@@ -782,42 +789,41 @@ def value_and_gradient(tree, allocation=None, discount_rate=1.0,
     return value, gradient
 
 
-def print_report(tree, allocation=None, discount_rate=1.0, verify=False):
-    """Compute and pretty-print the value and per-control gradient table."""
-    value, gradient = value_and_gradient(tree, allocation, discount_rate, verify=verify)
-    names = [c.name for c in collect_controls(to_binary_tree(tree))]
-    if allocation is None:
-        allocation = {name: 1.0 / len(names) for name in names}
-    print(f"\nV* = {value:.6f}    (discount_rate = {discount_rate})")
-    header = f"{'control':<10}{'allocation':>12}{'dV*/d alloc':>15}{'deterrence':>14}"
-    print(header)
-    print("-" * len(header))
-    for name in names:
-        print(f"{name:<10}{allocation[name]:>12.4f}{gradient[name]:>15.6f}{-gradient[name]:>14.6f}")
-    return value, gradient
-
-
-# =========================================================================
-# Demo
-# =========================================================================
-if __name__ == "__main__":
-    print("=" * 66)
-    print("DEMO 1  --  Parallel(Series(a, Parallel(b, c)), Series(d, e)),  q_a = 2")
-    print("=" * 66)
-    tree = Parallel(
-        Series(Control("a", 2, [0.5, 0.4]),
-               Parallel(Control("b", 1, 0.6), Control("c", 1, 0.55))),
-        Series(Control("d", 1, 0.5), Control("e", 1, 0.45)),
-    )
-    allocation = {"a": 0.20, "b": 0.10, "c": 0.15, "d": 0.30, "e": 0.25}
-    print_report(tree, allocation, discount_rate=1.0, verify=True)
-
-    print("\n" + "=" * 66)
-    print("DEMO 2  --  n-ary parallel race of three chains (uniform allocation)")
-    print("=" * 66)
-    three_way = Parallel(
-        Series(Control("x1", 1, 0.6), Control("x2", 1, 0.5)),
-        Series(Control("y1", 2, [0.5, 0.3]), Control("y2", 1, 0.55)),
-        Control("z", 1, 0.45),
-    )
-    print_report(three_way, allocation=None, discount_rate=1.0, verify=True)
+# --- DEAD: pretty-printer + __main__ demo (never imported; only used by the demo).
+# --- Kept commented for reference.
+# def print_report(tree, allocation=None, discount_rate=1.0, verify=False):
+#     """Compute and pretty-print the value and per-control gradient table."""
+#     value, gradient = value_and_gradient(tree, allocation, discount_rate, verify=verify)
+#     names = [c.name for c in collect_controls(to_binary_tree(tree))]
+#     if allocation is None:
+#         allocation = {name: 1.0 / len(names) for name in names}
+#     print(f"\nV* = {value:.6f}    (discount_rate = {discount_rate})")
+#     header = f"{'control':<10}{'allocation':>12}{'dV*/d alloc':>15}{'deterrence':>14}"
+#     print(header)
+#     print("-" * len(header))
+#     for name in names:
+#         print(f"{name:<10}{allocation[name]:>12.4f}{gradient[name]:>15.6f}{-gradient[name]:>14.6f}")
+#     return value, gradient
+#
+#
+# if __name__ == "__main__":
+#     print("=" * 66)
+#     print("DEMO 1  --  Parallel(Series(a, Parallel(b, c)), Series(d, e)),  q_a = 2")
+#     print("=" * 66)
+#     tree = Parallel(
+#         Series(Control("a", 2, [0.5, 0.4]),
+#                Parallel(Control("b", 1, 0.6), Control("c", 1, 0.55))),
+#         Series(Control("d", 1, 0.5), Control("e", 1, 0.45)),
+#     )
+#     allocation = {"a": 0.20, "b": 0.10, "c": 0.15, "d": 0.30, "e": 0.25}
+#     print_report(tree, allocation, discount_rate=1.0, verify=True)
+#
+#     print("\n" + "=" * 66)
+#     print("DEMO 2  --  n-ary parallel race of three chains (uniform allocation)")
+#     print("=" * 66)
+#     three_way = Parallel(
+#         Series(Control("x1", 1, 0.6), Control("x2", 1, 0.5)),
+#         Series(Control("y1", 2, [0.5, 0.3]), Control("y2", 1, 0.55)),
+#         Control("z", 1, 0.45),
+#     )
+#     print_report(three_way, allocation=None, discount_rate=1.0, verify=True)
