@@ -51,41 +51,68 @@ class Var:
         self.adj = 0.0
 
 
+# Op codes for the flat tape (avoids a Python closure per arithmetic op).
+_ADD, _SUB, _MUL, _DIV = 0, 1, 2, 3
+
+
 class Tape:
-    """Records backward closures for every arithmetic op; replayed in reverse."""
+    """Flat tape of (opcode, a, b, out) records, replayed by one inline reverse pass.
+
+    Recording a tuple per op (instead of a closure) and accumulating adjoints
+    inline in `backward` (instead of a per-adjoint helper call) removes the two
+    dominant constant-factor costs of the reference reverse-mode AD. The `g == 0`
+    skip prunes ops that carry no gradient (adding 0 is a no-op), so the result is
+    bit-identical to the closure version."""
+
+    __slots__ = ("_ops",)
 
     def __init__(self):
         self._ops = []
 
     def add(self, a, b):
         o = Var(a.val + b.val)
-        self._ops.append(lambda: (_acc(a, o.adj), _acc(b, o.adj)))
+        self._ops.append((_ADD, a, b, o))
         return o
 
     def sub(self, a, b):
         o = Var(a.val - b.val)
-        self._ops.append(lambda: (_acc(a, o.adj), _acc(b, -o.adj)))
+        self._ops.append((_SUB, a, b, o))
         return o
 
     def mul(self, a, b):
         o = Var(a.val * b.val)
-        av, bv = a.val, b.val
-        self._ops.append(lambda: (_acc(a, o.adj * bv), _acc(b, o.adj * av)))
+        self._ops.append((_MUL, a, b, o))
         return o
 
     def div(self, a, b):
+        # Defensive against a zero (or degenerate) denominator: callers already
+        # guard their divisors (piece widths, hull slope gaps, 1 - x*a), but never
+        # let one crash the tape. A degenerate ratio contributes nothing, so return
+        # a constant 0 and don't record it -- so `backward` never sees bv == 0 either.
+        if abs(b.val) < _GUARD:
+            return Var(0.0)
         o = Var(a.val / b.val)
-        av, bv = a.val, b.val
-        self._ops.append(lambda: (_acc(a, o.adj / bv), _acc(b, -o.adj * av / (bv * bv))))
+        self._ops.append((_DIV, a, b, o))
         return o
 
     def backward(self):
-        for op in reversed(self._ops):
-            op()
-
-
-def _acc(v, g):
-    v.adj += g
+        for opcode, a, b, o in reversed(self._ops):
+            g = o.adj
+            if g == 0.0:                          # no gradient flows through this op
+                continue
+            if opcode == _MUL:
+                a.adj += g * b.val
+                b.adj += g * a.val
+            elif opcode == _ADD:
+                a.adj += g
+                b.adj += g
+            elif opcode == _SUB:
+                a.adj += g
+                b.adj -= g
+            else:                                 # _DIV
+                bv = b.val
+                a.adj += g / bv
+                b.adj -= g * a.val / (bv * bv)
 
 
 # =========================================================================
@@ -105,6 +132,12 @@ def _piece_index(xs, sval):
 
 
 def _slope(tape, xs, ys, k):
+    # Deep series chains drive V* = prod_i Psi_ci(0) -> 0 and cram breakpoints
+    # toward 0 until adjacent ones round to the same float (a zero-width piece).
+    # Guard the division: a piece with no width integrates to nothing, so its
+    # slope is immaterial -- return 0 rather than dividing by ~0 (ZeroDivisionError).
+    if abs(xs[k + 1].val - xs[k].val) < _GUARD:
+        return Var(0.0)
     return tape.div(tape.sub(ys[k + 1], ys[k]), tape.sub(xs[k + 1], xs[k]))
 
 
@@ -238,6 +271,10 @@ def _series_merge(tape, up, down):
     if xs[-1] is not ONE and xs[-1].val < 1.0 - _MERGE_TOL:       # ensure domain ends at 1
         xs.append(ONE)
         ys.append(tape.add(tape.mul(A, ONE), B))
+    # NB: do NOT dedup coincident breakpoints here -- an s-position dedup at
+    # _MERGE_TOL floors V* at ~1e-12 on deep chains (their true V* underflows far
+    # below that). The _slope guard alone handles the zero-width division safely
+    # while preserving the tiny values (see mary, which has no dedup and is exact).
     return xs, ys
 
 
