@@ -14,6 +14,13 @@ Methods (--method)
   fold        exact gradient via sp_gradients2 (weight-list fold, O(Q^2) worst case).
   tape        exact gradient via sp_gradients3 binary reverse-tape (O(Q d_b)).
   mary        exact gradient via sp_gradients3 direct m-ary (O(sum_G Q_G log m_G)).
+  par-tape    `tape` spread across `--cores` processes (sp_par_gradients subtree cut).
+  par-mary    `mary` spread across `--cores` processes (sp_par_gradients subtree cut).
+
+The `par-*` methods give a bit-identical gradient to their serial counterparts and
+help most on series_heavy (deep/narrow) nets; on small/wide instances they fall
+back to serial internally. The persistent worker pool amortises process spawn over
+the RM iterations.
 
 Instance selection
 ------------------
@@ -51,12 +58,13 @@ if _HERE not in sys.path:
 import gradient_rm as G                              # shared helpers  # noqa: E402
 import sp_gradients2 as _G2                          # noqa: E402
 import sp_gradients3 as _G3                          # noqa: E402
+import sp_par_gradients as _GP                       # noqa: E402
 
 
 # ===========================================================================
 # Gradient oracles and the (exact) objective monitor
 # ===========================================================================
-def opt_gradient(method, tree, node, probs, ell, rho, batch, rng, names):
+def opt_gradient(method, tree, node, probs, ell, rho, batch, rng, names, plan=None):
     """The gradient dV*/dl used to drive RM, per the chosen method."""
     if method == "stochastic":
         return G.stochastic_gradient(node, probs, ell, rho, batch, rng, names)
@@ -65,6 +73,9 @@ def opt_gradient(method, tree, node, probs, ell, rho, batch, rng, names):
         return grad
     if method == "mary":
         _v, grad = _G3.value_and_gradient(tree, ell, rho, method="mary")
+        return grad
+    if method in ("par-tape", "par-mary"):            # reuse the resident CutPlan
+        _v, grad = plan.value_and_gradient(ell, rho)
         return grad
     _v, grad = _G2.value_and_gradient(tree, allocation=ell, discount_rate=rho, native=True)
     return grad                                       # fold
@@ -85,7 +96,7 @@ def monitor_value(monitor_impl, tree, ell, rho):
 # One RM run of the chosen method
 # ===========================================================================
 def rm_run(method, node, probs, tree, names, rho, batch, iters, log_every,
-           avg_power, monitor_impl, run_seed):
+           avg_power, monitor_impl, run_seed, plan=None):
     n = len(names)
     rng = random.Random(f"{run_seed}")
     ell = {v: 1.0 / n for v in names}
@@ -100,7 +111,7 @@ def rm_run(method, node, probs, tree, names, rho, batch, iters, log_every,
         for v in names:
             ell_sum[v] += w * ell[v]
         w_total += w
-        grad = opt_gradient(method, tree, node, probs, ell, rho, batch, rng, names)
+        grad = opt_gradient(method, tree, node, probs, ell, rho, batch, rng, names, plan)
         ell = G.rm_step(ell, grad, cumulative_regret, names)
         cum_time += time.perf_counter() - start
         if t == 1 or t % log_every == 0 or t == iters:
@@ -129,6 +140,8 @@ def _mean_std(xs):
 
 
 def run(args):
+    if args.method in ("par-tape", "par-mary"):
+        _GP.set_cores(args.cores)                     # the global core cap
     nets = G.load_networks(args.csv)
     nets = [nw for nw in nets if nw["network_id"] >= args.start_id]
     if args.end_id is not None:
@@ -146,7 +159,8 @@ def run(args):
     cwr = csv.DictWriter(cfile, fieldnames=CURVE_FIELDS); cwr.writeheader()
 
     print(f"{len(nets)} networks | method={args.method} "
-          f"{'batch=' + str(args.batch) + ' runs=' + str(n_runs) if args.method == 'stochastic' else ''} "
+          f"{'batch=' + str(args.batch) + ' runs=' + str(n_runs) if args.method == 'stochastic' else ''}"
+          f"{' cores=' + str(args.cores) if args.method in ('par-tape', 'par-mary') else ''} "
           f"iters={args.iters} rho={args.rho} avg_power={args.avg_power} "
           f"monitor={args.monitor_impl}\n", flush=True)
 
@@ -159,12 +173,21 @@ def run(args):
         print(f"=== [{idx}/{len(nets)}] network {info['network_id']}: "
               f"n={info['n_controls']} Q={info['total_Q']} ===", flush=True)
 
+        # One resident CutPlan per network (partition + subtrees shipped once);
+        # reused across every RM iteration so only allocation/adjoints move.
+        plan = None
+        if args.method in ("par-tape", "par-mary"):
+            plan = _GP.make_plan(tree, method=("binary" if args.method == "par-tape" else "mary"),
+                                 cores=args.cores)
+
         per_run, times = [], []
         for r in range(n_runs):
             curve, wall = rm_run(args.method, node, info["probs"], tree, names,
                                  args.rho, args.batch, args.iters, args.log_every,
-                                 args.avg_power, args.monitor_impl, f"{args.seed}:{r}")
+                                 args.avg_power, args.monitor_impl, f"{args.seed}:{r}", plan)
             per_run.append(curve); times.append(wall)
+        if plan is not None:
+            plan.close()
 
         # aligned curve (mean/std across runs at each logged t)
         all_t = sorted({t for cp in per_run for t in cp})
@@ -193,6 +216,7 @@ def run(args):
               f"(over {n_runs} run{'s' if n_runs > 1 else ''}, {args.iters} iters)", flush=True)
 
     sfile.close(); cfile.close()
+    _GP.shutdown()                                    # release the worker pool (no-op if unused)
     print(f"\nwrote {args.out}_summary.csv and {args.out}_curves.csv")
 
 
@@ -200,8 +224,11 @@ def build_arg_parser():
     default_csv = os.path.join(os.path.dirname(_HERE), "exp1", "synth_nets_random_ell.csv")
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--method", required=True, choices=["stochastic", "fold", "tape", "mary"],
+    p.add_argument("--method", required=True,
+                   choices=["stochastic", "fold", "tape", "mary", "par-tape", "par-mary"],
                    help="which single gradient oracle to run")
+    p.add_argument("--cores", type=int, default=_GP.CORES,
+                   help="core cap for par-* methods (default: os.cpu_count() - 1)")
     p.add_argument("--csv", default=default_csv, help="networks (structure + probs)")
     p.add_argument("--out", default=os.path.join(_HERE, "gradient_rm_tape"), help="output base path")
     p.add_argument("--start-id", type=int, default=0, help="first network_id (inclusive)")
