@@ -16,6 +16,7 @@ Methods (--method)
   mary        exact gradient via sp_gradients3 direct m-ary (O(sum_G Q_G log m_G)).
   par-tape    `tape` spread across `--cores` processes (sp_par_gradients subtree cut).
   par-mary    `mary` spread across `--cores` processes (sp_par_gradients subtree cut).
+  par-fold    `fold` spread across `--cores` processes (sp_par_gradients_fold subtree cut).
 
 The `par-*` methods give a bit-identical gradient to their serial counterparts and
 help most on series_heavy (deep/narrow) nets; on small/wide instances they fall
@@ -59,6 +60,7 @@ import gradient_rm as G                              # shared helpers  # noqa: E
 import sp_gradients2 as _G2                          # noqa: E402
 import sp_gradients3 as _G3                          # noqa: E402
 import sp_par_gradients as _GP                       # noqa: E402
+import sp_par_gradients_fold as _GPF                  # noqa: E402
 
 
 # ===========================================================================
@@ -74,7 +76,7 @@ def opt_gradient(method, tree, node, probs, ell, rho, batch, rng, names, plan=No
     if method == "mary":
         _v, grad = _G3.value_and_gradient(tree, ell, rho, method="mary")
         return grad
-    if method in ("par-tape", "par-mary"):            # reuse the resident CutPlan
+    if method in ("par-tape", "par-mary", "par-fold"):  # reuse the resident CutPlan
         _v, grad = plan.value_and_gradient(ell, rho)
         return grad
     _v, grad = _G2.value_and_gradient(tree, allocation=ell, discount_rate=rho, native=True)
@@ -160,7 +162,7 @@ def run(args):
 
     print(f"{len(nets)} networks | method={args.method} "
           f"{'batch=' + str(args.batch) + ' runs=' + str(n_runs) if args.method == 'stochastic' else ''}"
-          f"{' cores=' + str(args.cores) if args.method in ('par-tape', 'par-mary') else ''} "
+          f"{' cores=' + str(args.cores) if args.method in ('par-tape', 'par-mary', 'par-fold') else ''} "
           f"iters={args.iters} rho={args.rho} avg_power={args.avg_power} "
           f"monitor={args.monitor_impl}\n", flush=True)
 
@@ -179,6 +181,8 @@ def run(args):
         if args.method in ("par-tape", "par-mary"):
             plan = _GP.make_plan(tree, method=("binary" if args.method == "par-tape" else "mary"),
                                  cores=args.cores)
+        elif args.method == "par-fold":
+            plan = _GPF.make_plan(tree, cores=args.cores)
 
         per_run, times = [], []
         for r in range(n_runs):
@@ -216,7 +220,7 @@ def run(args):
               f"(over {n_runs} run{'s' if n_runs > 1 else ''}, {args.iters} iters)", flush=True)
 
     sfile.close(); cfile.close()
-    _GP.shutdown()                                    # release the worker pool (no-op if unused)
+    _GP.shutdown(); _GPF.shutdown()                   # release worker pools (no-op if unused)
     print(f"\nwrote {args.out}_summary.csv and {args.out}_curves.csv")
 
 
@@ -225,7 +229,8 @@ def build_arg_parser():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--method", required=True,
-                   choices=["stochastic", "fold", "tape", "mary", "par-tape", "par-mary"],
+                   choices=["stochastic", "fold", "tape", "mary",
+                            "par-tape", "par-mary", "par-fold"],
                    help="which single gradient oracle to run")
     p.add_argument("--cores", type=int, default=_GP.CORES,
                    help="core cap for par-* methods (default: os.cpu_count() - 1)")

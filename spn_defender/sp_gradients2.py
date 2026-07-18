@@ -566,11 +566,17 @@ def compute_profiles_nary(node, discount_factors, forward_cache):
     return profile
 
 
-def compute_gradient_nary(tree, discount_factors, discount_rate, forward_cache, rel_tol=0.0):
+def compute_gradient_nary(tree, discount_factors, discount_rate, forward_cache, rel_tol=0.0,
+                          seed=None):
     """Native n-ary backward pass returning {control_name: d V* / d allocation}.
 
     rel_tol > 0 relatively-prunes the adjoint weight lists at Parallel nodes (a
-    small, bounded approximation that avoids the O(Q^2) adjoint blow-up); 0 = exact."""
+    small, bounded approximation that avoids the O(Q^2) adjoint blow-up); 0 = exact.
+
+    seed: the weight list seeded at `tree` (default [(0.0, 1.0)], i.e. V* = root(0)).
+    Passing a custom seed lets the same routine differentiate a SUBTREE given the
+    outside-option context delivered by the rest of the network -- this is what the
+    parallel cut (sp_par_gradients_fold) injects at a subtree boundary."""
     gradient = {}
 
     def propagate(node, weight_list):
@@ -623,7 +629,7 @@ def compute_gradient_nary(tree, discount_factors, discount_rate, forward_cache, 
                 weights = downstream_weights          # feed the suffix composite next
             propagate(node.children[k - 1], weights)  # last child = suffix_profiles[k-1]
 
-    propagate(tree, [(0.0, 1.0)])
+    propagate(tree, [(0.0, 1.0)] if seed is None else seed)
     return gradient
 
 

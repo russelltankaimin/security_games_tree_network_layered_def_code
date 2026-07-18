@@ -72,7 +72,7 @@ CORES = max(1, (os.cpu_count() or 2) - 1)
 
 # Below this total state count the IPC / checkpoint overhead outweighs the split,
 # so we run serially. Tunable per call via `min_parallel_q=`.
-_MIN_PARALLEL_Q = 2000
+_MIN_PARALLEL_Q = 1000
 
 
 def set_cores(n):
