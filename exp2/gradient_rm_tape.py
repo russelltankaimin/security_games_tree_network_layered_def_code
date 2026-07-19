@@ -98,7 +98,11 @@ def monitor_value(monitor_impl, tree, ell, rho):
 # One RM run of the chosen method
 # ===========================================================================
 def rm_run(method, node, probs, tree, names, rho, batch, iters, log_every,
-           avg_power, monitor_impl, run_seed, plan=None):
+           avg_power, monitor_impl, run_seed, plan=None, target_v=None):
+    """RM descent. If `target_v` is set, run until the (untimed, exact) monitored
+    objective V*(l_bar) <= target_v (no iteration cap). Otherwise run exactly
+    `iters` iterations. Returns (curve, cum_time, hit_iter): the iteration the
+    target was reached, or None when there is no target."""
     n = len(names)
     rng = random.Random(f"{run_seed}")
     ell = {v: 1.0 / n for v in names}
@@ -107,7 +111,10 @@ def rm_run(method, node, probs, tree, names, rho, batch, iters, log_every,
     w_total = 0.0
     cum_time = 0.0
     curve = {}                                        # t -> (obj, cum_time)
-    for t in range(1, iters + 1):
+    hit_iter = None
+    t = 0
+    while True:
+        t += 1
         start = time.perf_counter()                   # TIMED: essential work only
         w = G.avg_weight(t, avg_power)
         for v in names:
@@ -116,11 +123,17 @@ def rm_run(method, node, probs, tree, names, rho, batch, iters, log_every,
         grad = opt_gradient(method, tree, node, probs, ell, rho, batch, rng, names, plan)
         ell = G.rm_step(ell, grad, cumulative_regret, names)
         cum_time += time.perf_counter() - start
-        if t == 1 or t % log_every == 0 or t == iters:
+        if t == 1 or t % log_every == 0 or (target_v is None and t == iters):
             ell_bar = {v: ell_sum[v] / w_total for v in names}
-            curve[t] = (monitor_value(monitor_impl, tree, ell_bar, rho), cum_time)  # UNTIMED
+            obj = monitor_value(monitor_impl, tree, ell_bar, rho)          # UNTIMED
+            curve[t] = (obj, cum_time)
+            if target_v is not None and obj <= target_v:                   # reached target
+                hit_iter = t
+                break
+        if target_v is None and t == iters:           # no target: stop at --iters
+            break
     G.value_profile.cache_clear()
-    return curve, cum_time
+    return curve, cum_time, hit_iter
 
 
 # ===========================================================================
@@ -128,7 +141,8 @@ def rm_run(method, node, probs, tree, names, rho, batch, iters, log_every,
 # ===========================================================================
 SUMMARY_FIELDS = ["network_id", "n_controls", "total_Q", "method", "batch", "runs",
                   "iters", "avg_power", "rho", "wall_time_s", "wall_time_std",
-                  "final_obj", "final_obj_std"]
+                  "final_obj", "final_obj_std",
+                  "target_v", "reached", "hit_iter_mean", "hit_iter_std", "hit_wall_mean"]
 CURVE_FIELDS = ["network_id", "t", "obj_mean", "obj_std", "runs"]
 
 
@@ -163,7 +177,8 @@ def run(args):
     print(f"{len(nets)} networks | method={args.method} "
           f"{'batch=' + str(args.batch) + ' runs=' + str(n_runs) if args.method == 'stochastic' else ''}"
           f"{' cores=' + str(args.cores) if args.method in ('par-tape', 'par-mary', 'par-fold') else ''} "
-          f"iters={args.iters} rho={args.rho} avg_power={args.avg_power} "
+          f"{'target_v=' + str(args.target_v) + ' (until reached)' if args.target_v is not None else 'iters=' + str(args.iters)} "
+          f"rho={args.rho} avg_power={args.avg_power} "
           f"monitor={args.monitor_impl}\n", flush=True)
 
     for idx, info in enumerate(nets, 1):
@@ -184,12 +199,13 @@ def run(args):
         elif args.method == "par-fold":
             plan = _GPF.make_plan(tree, cores=args.cores)
 
-        per_run, times = [], []
+        per_run, times, hits = [], [], []
         for r in range(n_runs):
-            curve, wall = rm_run(args.method, node, info["probs"], tree, names,
-                                 args.rho, args.batch, args.iters, args.log_every,
-                                 args.avg_power, args.monitor_impl, f"{args.seed}:{r}", plan)
-            per_run.append(curve); times.append(wall)
+            curve, wall, hit = rm_run(args.method, node, info["probs"], tree, names,
+                                      args.rho, args.batch, args.iters, args.log_every,
+                                      args.avg_power, args.monitor_impl, f"{args.seed}:{r}",
+                                      plan, args.target_v)
+            per_run.append(curve); times.append(wall); hits.append(hit)
         if plan is not None:
             plan.close()
 
@@ -203,21 +219,42 @@ def run(args):
                           "obj_std": f"{sd:.8f}", "runs": len(objs)})
         cfile.flush()
 
-        last_t = all_t[-1]
-        final_objs = [cp[last_t][0] for cp in per_run if last_t in cp]
+        final_objs = [cp[max(cp)][0] for cp in per_run if cp]   # each run's last checkpoint
         fm, fsd = _mean_std(final_objs)
         tm, tsd = _mean_std(times)
+
+        # target-stop stats: iterations and TIMED wall to first hit V* <= target
+        reached_iters = [float(h) for h in hits if h is not None]
+        reached_walls = [per_run[i][hits[i]][1] for i in range(len(hits)) if hits[i] is not None]
+        hm, hsd = _mean_std(reached_iters)
+        wm, _ = _mean_std(reached_walls)
+
         swr.writerow({
             "network_id": info["network_id"], "n_controls": info["n_controls"],
             "total_Q": info["total_Q"], "method": args.method, "batch": args.batch,
             "runs": n_runs, "iters": args.iters, "avg_power": args.avg_power,
             "rho": args.rho, "wall_time_s": f"{tm:.6f}", "wall_time_std": f"{tsd:.6f}",
             "final_obj": f"{fm:.8f}", "final_obj_std": f"{fsd:.8f}",
+            "target_v": ("" if args.target_v is None else f"{args.target_v:.6f}"),
+            "reached": ("" if args.target_v is None else f"{len(reached_iters)}/{n_runs}"),
+            "hit_iter_mean": (f"{hm:.1f}" if hm is not None else ""),
+            "hit_iter_std": f"{hsd:.1f}" if reached_iters else "",
+            "hit_wall_mean": (f"{wm:.6f}" if wm is not None else ""),
         })
         sfile.flush()
-        print(f"  {args.method}: final V*={fm:.6f}  wall={tm:.3f}s"
-              f"{' +-' + format(tsd, '.3f') if n_runs > 1 else ''}  "
-              f"(over {n_runs} run{'s' if n_runs > 1 else ''}, {args.iters} iters)", flush=True)
+        if args.target_v is not None:
+            if reached_iters:
+                pm = f" +-{hsd:.0f}" if len(reached_iters) > 1 else ""
+                print(f"  {args.method}: reached V*<={args.target_v:g} at iter {hm:.0f}{pm}  "
+                      f"wall={wm:.3f}s  ({len(reached_iters)}/{n_runs} run"
+                      f"{'s' if n_runs > 1 else ''})  final V*={fm:.6f}", flush=True)
+            else:
+                print(f"  {args.method}: did NOT reach V*<={args.target_v:g} within "
+                      f"{args.iters} iters  (final V*={fm:.6f}, wall={tm:.3f}s)", flush=True)
+        else:
+            print(f"  {args.method}: final V*={fm:.6f}  wall={tm:.3f}s"
+                  f"{' +-' + format(tsd, '.3f') if n_runs > 1 else ''}  "
+                  f"(over {n_runs} run{'s' if n_runs > 1 else ''}, {args.iters} iters)", flush=True)
 
     sfile.close(); cfile.close()
     _GP.shutdown(); _GPF.shutdown()                   # release worker pools (no-op if unused)
@@ -239,7 +276,12 @@ def build_arg_parser():
     p.add_argument("--start-id", type=int, default=0, help="first network_id (inclusive)")
     p.add_argument("--end-id", type=int, default=None, help="last network_id (inclusive)")
     p.add_argument("--limit", type=int, default=0, help="only the first N of the selected range")
-    p.add_argument("--iters", type=int, default=2000, help="RM iterations to run")
+    p.add_argument("--iters", type=int, default=2000,
+                   help="RM iterations to run (ignored when --target-v is set)")
+    p.add_argument("--target-v", type=float, default=None,
+                   help="run until the monitored V*(l_bar) <= this target, with NO "
+                        "iteration cap (checked at the --log-every cadence). If unset, "
+                        "run exactly --iters.")
     p.add_argument("--batch", type=int, default=1, help="stochastic gradient batch size b")
     p.add_argument("--runs", type=int, default=1, help="independent stochastic runs to average")
     p.add_argument("--log-every", type=int, default=50, help="objective-curve checkpoint cadence")
