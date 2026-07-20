@@ -98,11 +98,14 @@ def monitor_value(monitor_impl, tree, ell, rho):
 # One RM run of the chosen method
 # ===========================================================================
 def rm_run(method, node, probs, tree, names, rho, batch, iters, log_every,
-           avg_power, monitor_impl, run_seed, plan=None, target_v=None):
+           avg_power, monitor_impl, run_seed, plan=None, target_v=None, stream_label=None):
     """RM descent. If `target_v` is set, run until the (untimed, exact) monitored
     objective V*(l_bar) <= target_v (no iteration cap). Otherwise run exactly
     `iters` iterations. Returns (curve, cum_time, hit_iter): the iteration the
-    target was reached, or None when there is no target."""
+    target was reached, or None when there is no target.
+
+    If `stream_label` is given, print `iter / V* / timed-elapsed` at every
+    checkpoint (the --log-every cadence) to stdout, so progress can be tracked live."""
     n = len(names)
     rng = random.Random(f"{run_seed}")
     ell = {v: 1.0 / n for v in names}
@@ -127,6 +130,9 @@ def rm_run(method, node, probs, tree, names, rho, batch, iters, log_every,
             ell_bar = {v: ell_sum[v] / w_total for v in names}
             obj = monitor_value(monitor_impl, tree, ell_bar, rho)          # UNTIMED
             curve[t] = (obj, cum_time)
+            if stream_label is not None:                                   # live progress
+                print(f"  [{stream_label}] iter {t:>7}  V*={obj:.6f}  t={cum_time:8.3f}s",
+                      flush=True)
             if target_v is not None and obj <= target_v:                   # reached target
                 hit_iter = t
                 break
@@ -199,12 +205,15 @@ def run(args):
         elif args.method == "par-fold":
             plan = _GPF.make_plan(tree, cores=args.cores)
 
+        do_stream = args.stream or args.method == "stochastic"
         per_run, times, hits = [], [], []
         for r in range(n_runs):
+            label = (f"net{info['network_id']}" + (f" run{r}" if n_runs > 1 else "")
+                     if do_stream else None)
             curve, wall, hit = rm_run(args.method, node, info["probs"], tree, names,
                                       args.rho, args.batch, args.iters, args.log_every,
                                       args.avg_power, args.monitor_impl, f"{args.seed}:{r}",
-                                      plan, args.target_v)
+                                      plan, args.target_v, label)
             per_run.append(curve); times.append(wall); hits.append(hit)
         if plan is not None:
             plan.close()
@@ -292,6 +301,9 @@ def build_arg_parser():
                    help="exact oracle used for the UNTIMED objective V*(l_bar) (default tape: "
                         "exact and fast on large nets)")
     p.add_argument("--seed", type=int, default=0, help="RNG seed (stochastic)")
+    p.add_argument("--stream", action="store_true",
+                   help="print iter / V*(l_bar) / timed-elapsed at each --log-every "
+                        "checkpoint to stdout during the run (auto-on for --method stochastic)")
     return p
 
 
