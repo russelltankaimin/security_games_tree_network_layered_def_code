@@ -101,7 +101,8 @@ def parse_structure(text, make_control):
     """Parse a `structure` string into an sp_attacker network.
 
     `make_control(name)` supplies the Control (with its synthesised beta / ps)
-    for each leaf. Ser/Par nodes are binary, matching the CSV format.
+    for each leaf. Ser/Par nodes are n-ary (>= 2 children), matching both the
+    binary CSVs and the wide/nested n-ary CSVs (Series/Par are n-ary-capable).
     """
     pos = 0
 
@@ -111,13 +112,13 @@ def parse_structure(text, make_control):
         if head in ("Ser(", "Par("):
             op = head[:3]
             pos += 4
-            left = parse()
-            assert text[pos] == ",", f"expected ',' at {pos}"
-            pos += 1
-            right = parse()
+            kids = [parse()]
+            while text[pos] == ",":               # collect all children (n-ary)
+                pos += 1
+                kids.append(parse())
             assert text[pos] == ")", f"expected ')' at {pos}"
             pos += 1
-            return Series(left, right) if op == "Ser" else Par(left, right)
+            return Series(*kids) if op == "Ser" else Par(*kids)
         start = pos
         while pos < len(text) and text[pos] not in ",)":
             pos += 1
@@ -333,6 +334,7 @@ def load_networks(csv_path):
     """One entry per network. Requires `network_id` and `structure`; picks up
     optional `total_Q`/`n_controls`/`depth` (ints) and `probs`/`ell` (JSON) when
     present."""
+    csv.field_size_limit(10 ** 9)      # probs/ell can be large JSON blobs
     seen = {}
     with open(csv_path, newline="") as handle:
         for row in csv.DictReader(handle):
