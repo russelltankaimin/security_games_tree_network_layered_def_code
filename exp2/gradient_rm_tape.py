@@ -149,7 +149,7 @@ SUMMARY_FIELDS = ["network_id", "n_controls", "total_Q", "method", "batch", "run
                   "iters", "avg_power", "rho", "wall_time_s", "wall_time_std",
                   "final_obj", "final_obj_std",
                   "target_v", "reached", "hit_iter_mean", "hit_iter_std", "hit_wall_mean"]
-CURVE_FIELDS = ["network_id", "t", "obj_mean", "obj_std", "runs"]
+CURVE_FIELDS = ["network_id", "t", "obj_mean", "obj_std", "time_s", "runs"]
 
 
 def _mean_std(xs):
@@ -218,14 +218,18 @@ def run(args):
         if plan is not None:
             plan.close()
 
-        # aligned curve (mean/std across runs at each logged t)
+        # aligned curve (mean/std of V* and mean timed-elapsed across runs at each logged t)
         all_t = sorted({t for cp in per_run for t in cp})
         for t in all_t:
             objs = [cp[t][0] for cp in per_run if t in cp]
+            tms = [cp[t][1] for cp in per_run if t in cp]      # cum_time at this checkpoint
             m, sd = _mean_std(objs)
+            tm, _ = _mean_std(tms)
             cwr.writerow({"network_id": info["network_id"], "t": t,
                           "obj_mean": f"{m:.8f}" if m is not None else "",
-                          "obj_std": f"{sd:.8f}", "runs": len(objs)})
+                          "obj_std": f"{sd:.8f}",
+                          "time_s": f"{tm:.6f}" if tm is not None else "",
+                          "runs": len(objs)})
         cfile.flush()
 
         final_objs = [cp[max(cp)][0] for cp in per_run if cp]   # each run's last checkpoint
