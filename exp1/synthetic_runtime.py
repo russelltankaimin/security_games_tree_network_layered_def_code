@@ -251,20 +251,23 @@ class _Timeout(Exception):
 
 
 def brute_force_policy(net, max_states):
-    """Optimal attacker policy via exhaustive backward induction.
+    """Optimal attacker VALUE via exhaustive backward induction.
 
-    Enumerates every reachable joint state (exponential) and records the optimal
-    action at each. Raises `_StateCapExceeded` once the number of distinct states
-    exceeds `max_states` (a memory safeguard; 0 disables the cap). A pending
-    SIGALRM interrupts the recursion for the wall-clock timeout.
+    Enumerates every reachable joint state (exponential) and memoises its optimal
+    value. We only need the value (for the timing and the state count), not the
+    argmax action, so no policy dict is kept. State keys are a compact tuple of
+    per-control values in a FIXED control order (no `(name, value)` pairs, no
+    per-call sort) to keep the memoisation table small. Raises `_StateCapExceeded`
+    once the number of distinct states exceeds `max_states` (a memory safeguard;
+    0 disables the cap). A pending SIGALRM interrupts for the wall-clock timeout.
     """
     cmap = {c.name: c for c in controls(net)}
+    order = sorted(cmap)                       # fixed control order -> compact keys
     value_cache = {}
-    policy = {}
 
     def encode(state):
-        return tuple(sorted(
-            (n, v.name if isinstance(v, Status) else v) for n, v in state.items()))
+        return tuple(v.name if isinstance(v, Status) else v
+                     for v in (state[n] for n in order))
 
     def value(state):
         status = block_status(net, state)
@@ -278,7 +281,7 @@ def brute_force_policy(net, max_states):
             return cached
         if max_states and len(value_cache) >= max_states:
             raise _StateCapExceeded
-        best, best_action = 0.0, None
+        best = 0.0
         for name, k in frontier(net, state):
             control = cmap[name]
             p = control.ps[k]
@@ -286,9 +289,8 @@ def brute_force_policy(net, max_states):
                 p * value(apply_outcome(state, control, True))
                 + (1.0 - p) * value(apply_outcome(state, control, False)))
             if v > best:
-                best, best_action = v, name
+                best = v
         value_cache[key] = best
-        policy[key] = best_action
         return best
 
     value(initial_state(net))
