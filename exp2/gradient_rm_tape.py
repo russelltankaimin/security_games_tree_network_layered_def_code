@@ -98,7 +98,8 @@ def monitor_value(monitor_impl, tree, ell, rho):
 # One RM run of the chosen method
 # ===========================================================================
 def rm_run(method, node, probs, tree, names, rho, batch, iters, log_every,
-           avg_power, monitor_impl, run_seed, plan=None, target_v=None, stream_label=None):
+           avg_power, monitor_impl, run_seed, plan=None, target_v=None, stream_label=None,
+           checkpoint_cb=None):
     """RM descent. If `target_v` is set, run until the (untimed, exact) monitored
     objective V*(l_bar) <= target_v (no iteration cap). Otherwise run exactly
     `iters` iterations. Returns (curve, cum_time, hit_iter): the iteration the
@@ -133,6 +134,8 @@ def rm_run(method, node, probs, tree, names, rho, batch, iters, log_every,
             if stream_label is not None:                                   # live progress
                 print(f"  [{stream_label}] iter {t:>7}  V*={obj:.6f}  t={cum_time:8.3f}s",
                       flush=True)
+            if checkpoint_cb is not None:                                  # persist this row now
+                checkpoint_cb(t, obj, cum_time)
             if target_v is not None and obj <= target_v:                   # reached target
                 hit_iter = t
                 break
@@ -206,6 +209,17 @@ def run(args):
             plan = _GPF.make_plan(tree, cores=args.cores)
 
         do_stream = args.stream or args.method == "stochastic"
+        # With a single run, write each checkpoint to the curves CSV LIVE (flushed),
+        # so a mid-run abort keeps the partial curve. With >1 run we can't aggregate
+        # across runs until they finish, so those are written at the end.
+        incremental = (n_runs == 1)
+
+        def _live_row(t, obj, tm):
+            cwr.writerow({"network_id": info["network_id"], "t": t,
+                          "obj_mean": f"{obj:.8f}", "obj_std": "0.00000000",
+                          "time_s": f"{tm:.6f}", "runs": 1})
+            cfile.flush()
+
         per_run, times, hits = [], [], []
         for r in range(n_runs):
             label = (f"net{info['network_id']}" + (f" run{r}" if n_runs > 1 else "")
@@ -213,24 +227,27 @@ def run(args):
             curve, wall, hit = rm_run(args.method, node, info["probs"], tree, names,
                                       args.rho, args.batch, args.iters, args.log_every,
                                       args.avg_power, args.monitor_impl, f"{args.seed}:{r}",
-                                      plan, args.target_v, label)
+                                      plan, args.target_v, label,
+                                      _live_row if incremental else None)
             per_run.append(curve); times.append(wall); hits.append(hit)
         if plan is not None:
             plan.close()
 
-        # aligned curve (mean/std of V* and mean timed-elapsed across runs at each logged t)
-        all_t = sorted({t for cp in per_run for t in cp})
-        for t in all_t:
-            objs = [cp[t][0] for cp in per_run if t in cp]
-            tms = [cp[t][1] for cp in per_run if t in cp]      # cum_time at this checkpoint
-            m, sd = _mean_std(objs)
-            tm, _ = _mean_std(tms)
-            cwr.writerow({"network_id": info["network_id"], "t": t,
-                          "obj_mean": f"{m:.8f}" if m is not None else "",
-                          "obj_std": f"{sd:.8f}",
-                          "time_s": f"{tm:.6f}" if tm is not None else "",
-                          "runs": len(objs)})
-        cfile.flush()
+        # Multi-run: aligned curve (mean/std of V* and mean timed-elapsed at each logged t).
+        # Single-run rows were already written live above.
+        if not incremental:
+            all_t = sorted({t for cp in per_run for t in cp})
+            for t in all_t:
+                objs = [cp[t][0] for cp in per_run if t in cp]
+                tms = [cp[t][1] for cp in per_run if t in cp]  # cum_time at this checkpoint
+                m, sd = _mean_std(objs)
+                tm, _ = _mean_std(tms)
+                cwr.writerow({"network_id": info["network_id"], "t": t,
+                              "obj_mean": f"{m:.8f}" if m is not None else "",
+                              "obj_std": f"{sd:.8f}",
+                              "time_s": f"{tm:.6f}" if tm is not None else "",
+                              "runs": len(objs)})
+            cfile.flush()
 
         final_objs = [cp[max(cp)][0] for cp in per_run if cp]   # each run's last checkpoint
         fm, fsd = _mean_std(final_objs)
